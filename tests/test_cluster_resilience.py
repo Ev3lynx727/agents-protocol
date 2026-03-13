@@ -1,6 +1,5 @@
 """Integration tests for resilience in clustering."""
 
-import asyncio
 import pytest
 from agents_protocol import (
     MessageBroker,
@@ -14,7 +13,7 @@ from agents_protocol.resilience import CircuitState
 
 @pytest.mark.asyncio
 async def test_cluster_forwarding_resilience():
-    """Test that message forwarding failure trips the circuit breaker and updates metrics."""
+    """Test message forwarding failure trips circuit breaker and updates metrics."""
     broker = MessageBroker()
     manager = ClusterManager(broker, node_id="node1")
     broker._cluster_manager = manager

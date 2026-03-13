@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Any, Callable, TYPE_CHECKING
+from typing import Dict, Optional, Any, Callable, TYPE_CHECKING, Awaitable
 from .protocol import AgentMessage, AgentProtocol, MessageType, MessageStatus
 from .extensions import HookManager, AgentHook
 import asyncio

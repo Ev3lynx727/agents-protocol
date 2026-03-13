@@ -9,7 +9,6 @@ from typing import Dict, Optional, Callable, Any, List, cast, TYPE_CHECKING
 
 from .protocol import AgentMessage, MessageStatus, MessageType
 from .security import SecurityManager, AuthStatus
-from .resilience import RetryPolicy
 from .persistence import MessageStore
 from .agents import Agent, AgentRegistry
 from .extensions import ExtensionManager, BaseMiddleware, ValidationRule
@@ -171,7 +170,7 @@ class MessageBroker:
                         await asyncio.gather(*tasks)
                     msg.status = MessageStatus.DELIVERED
             else:
-                # Direct message - Still consult router for potentially multiple recipients
+                # Direct message - Still consult router for multiple recipients
                 # (e.g. if recipient_id is a capability pattern)
                 recipients = self._router.route(msg, list(self._agents.keys()))
 
@@ -193,7 +192,8 @@ class MessageBroker:
                             if success:
                                 msg.status = MessageStatus.DELIVERED
                                 logger.info(
-                                    f"Message {msg.id} forwarded to peer for agent {msg.recipient_id}"
+                                    f"Message {msg.id} forwarded to peer for "
+                                    f"agent {msg.recipient_id}"
                                 )
                                 self.metrics["forwarded"] += 1
                             else:

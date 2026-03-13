@@ -7,7 +7,9 @@ from typing import Optional, Dict, Any, Tuple, cast
 import asyncio
 import struct
 import logging
-from .protocol import AgentMessage, MessageStatus, MessageType
+import ssl
+import httpx
+from .protocol import AgentMessage, MessageStatus
 from .resilience import RetryPolicy, TimeoutManager
 from .messaging import MessageBroker
 

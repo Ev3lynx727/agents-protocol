@@ -2,7 +2,6 @@
 
 import asyncio
 import pytest
-import time
 from agents_protocol.resilience import (
     RetryPolicy,
     CircuitBreaker,

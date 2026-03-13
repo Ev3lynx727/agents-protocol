@@ -1,9 +1,8 @@
 """Tests for HTTP connection pooling in HTTPChannel."""
 
-import asyncio
 import pytest
 import httpx
-from agents_protocol import MessageBroker, HTTPChannel, Agent, AgentMessage, MessageType
+from agents_protocol import MessageBroker, HTTPChannel
 
 
 @pytest.mark.asyncio

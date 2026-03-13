@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Dict, List, Optional, Any, TYPE_CHECKING
+from typing import Dict, List, Optional, TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 from .resilience import CircuitBreaker, RetryPolicy, CircuitBreakerError
@@ -43,7 +43,8 @@ class ClusterPeer:
         async def _forward():
             import httpx
 
-            # In a real scenario, this would use a persistent session or a dedicated protocol
+            # In a real scenario, this would use a persistent session
+            # or a dedicated protocol
             async with httpx.AsyncClient(timeout=2.0) as client:
                 response = await client.post(
                     f"{self.node_info.endpoint}/internal/forward",
@@ -62,7 +63,8 @@ class ClusterPeer:
             return False
         except Exception as e:
             logger.debug(
-                f"Failed to forward message to peer {self.node_info.node_id} after retries: {e}"
+                f"Failed to forward message to peer {self.node_info.node_id} "
+                f"after retries: {e}"
             )
             return False
 

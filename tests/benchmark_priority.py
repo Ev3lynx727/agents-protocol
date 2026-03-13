@@ -1,14 +1,12 @@
 import asyncio
 import time
 import logging
-from typing import List
 from agents_protocol import (
     MessageBroker,
     Agent,
     AgentMessage,
     MessageType,
     MessagePriority,
-    LocalChannel,
 )
 
 # Configure logging to be quiet during benchmark
@@ -96,13 +94,14 @@ async def run_benchmark(num_messages: int = 400):
         await asyncio.wait_for(receiver.stop_event.wait(), timeout=15)
     except asyncio.TimeoutError:
         print(
-            f"Benchmark timed out! Received {len(receiver.received_priorities)} messages."
+            f"Benchmark timed out! Received "
+            f"{len(receiver.received_priorities)} messages."
         )
 
     if receiver.end_time and receiver.start_time:
         total_duration = receiver.end_time - receiver.start_time
         throughput = num_messages / total_duration
-        print(f"Results:")
+        print("Results:")
         print(f"  Total processing duration: {total_duration:.4f}s")
         print(f"  Throughput: {throughput:.2f} msg/s")
 

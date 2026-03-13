@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-import asyncio
 from agents_protocol import (
     MessageBroker,
     Agent,

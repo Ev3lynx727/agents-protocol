@@ -72,7 +72,8 @@ async def test_cluster_heartbeat_and_cleanup():
     cluster.add_peer(node_b_info)
     cluster.register_remote_agent("agent_b", "node_b")
 
-    # Run one iteration of maintenance (manually call _heartbeat_loop logic or just the cleanup part)
+    # Run one iteration of maintenance (manually call _heartbeat_loop
+    # logic or just the cleanup part)
     # We'll mock the heartbeat calls to fail
     with mock.patch(
         "httpx.AsyncClient.get", side_effect=Exception("Connection failed")
