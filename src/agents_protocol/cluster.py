@@ -55,9 +55,11 @@ class ClusterPeer:
 
         try:
             from typing import cast
+
             # Wrap in both circuit breaker and retry policy
             return cast(
-                bool, await self.circuit_breaker.call(self.retry_policy.execute, _forward)
+                bool,
+                await self.circuit_breaker.call(self.retry_policy.execute, _forward),
             )
         except CircuitBreakerError:
             logger.debug(

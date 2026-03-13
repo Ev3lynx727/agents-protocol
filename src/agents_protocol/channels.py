@@ -359,7 +359,9 @@ class WebSocketChannel(Channel):
         self._running = False
         logger.info("WebSocket channel stopped")
 
-    async def _handle_connection(self, websocket: Any, path: Optional[str] = None) -> None:
+    async def _handle_connection(
+        self, websocket: Any, path: Optional[str] = None
+    ) -> None:
         """Handle an incoming WebSocket connection.
 
         Args:

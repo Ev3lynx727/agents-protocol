@@ -41,9 +41,7 @@ class RetryPolicy:
         self.jitter = jitter
         self.retry_on = retry_on or [Exception]
 
-    async def execute(
-        self, func: Callable[..., Any], *args: Any, **kwargs: Any
-    ) -> Any:
+    async def execute(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """Execute a function with retries."""
         last_exception: Optional[Exception] = None
         for attempt in range(self.max_retries + 1):
