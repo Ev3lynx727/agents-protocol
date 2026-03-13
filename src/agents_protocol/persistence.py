@@ -1,5 +1,7 @@
 """Message persistence layer for agents_protocol."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict
 from datetime import datetime

@@ -1,5 +1,7 @@
 """Message broker and routing for agent communication."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import uuid

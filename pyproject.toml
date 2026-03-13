@@ -44,9 +44,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/agents_protocol"
-Issues = "https://github.com/yourusername/agents_protocol/issues"
-Documentation = "https://github.com/yourusername/agents_protocol#readme"
+Homepage = "https://github.com/ev3lynx727/agents_protocol"
+Issues = "https://github.com/ev3lynx727/agents_protocol/issues"
+Documentation = "https://github.com/ev3lynx727/agents_protocol#readme"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agents_protocol"]

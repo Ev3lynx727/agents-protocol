@@ -67,7 +67,8 @@ async def test_tcp_channel_message_delivery():
     await channel2.start()
 
     # Get the actual port assigned to receiver
-    host, port = channel2._server.sockets[0].getsockname()
+    addr = channel2._server.sockets[0].getsockname()
+    host, port = addr[:2]
     destination = f"{host}:{port}"
 
     # Sender channel doesn't strictly need to start a server just to send,
@@ -117,7 +118,8 @@ async def test_tcp_channel_raw_read():
     await channel.start()
 
     try:
-        host, port = channel._server.sockets[0].getsockname()
+        addr = channel._server.sockets[0].getsockname()
+        host, port = addr[:2]
         if host == "0.0.0.0":
             host = "127.0.0.1"
 

@@ -1,5 +1,7 @@
 """Communication channels for agent messaging."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, Tuple, cast
 import asyncio

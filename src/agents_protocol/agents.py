@@ -1,5 +1,7 @@
 """Agent base classes and registry for managing agents."""
 
+from __future__ import annotations
+
 from typing import Dict, Optional, Any, Callable, TYPE_CHECKING
 from .protocol import AgentMessage, AgentProtocol, MessageType, MessageStatus
 import asyncio
