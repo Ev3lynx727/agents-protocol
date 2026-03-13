@@ -1,4 +1,6 @@
-"""Tests for the message persistence layer."""
+"""Tests for the persistence module."""
+
+from __future__ import annotations
 
 import pytest
 from agents_protocol import (

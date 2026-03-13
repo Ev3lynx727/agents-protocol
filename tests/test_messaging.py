@@ -1,5 +1,7 @@
 """Tests for the messaging module."""
 
+from __future__ import annotations
+
 import pytest
 import asyncio
 from agents_protocol.messaging import MessageBroker

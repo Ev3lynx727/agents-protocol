@@ -1,5 +1,7 @@
 """Tests for the agents module."""
 
+from __future__ import annotations
+
 import pytest
 from typing import Dict, Any, Optional
 from agents_protocol.agents import Agent, AgentRegistry

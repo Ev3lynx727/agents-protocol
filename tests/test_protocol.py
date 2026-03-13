@@ -1,5 +1,7 @@
 """Tests for the protocol module."""
 
+from __future__ import annotations
+
 from agents_protocol.protocol import (
     AgentMessage,
     MessageType,
