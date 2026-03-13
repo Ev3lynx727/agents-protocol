@@ -3,7 +3,7 @@ requires = ["hatchling >= 1.26"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agents-protocol"
+name = "agents-sdk-py"
 version = "0.1.0"
 description = "A standardized protocol for AI agent communication"
 readme = "README.md"
