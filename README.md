@@ -185,11 +185,11 @@ from agents_protocol import MessageBroker, HTTPChannel, WebSocketChannel
 
 # HTTP channel for cross-machine communication
 broker = MessageBroker()
-http_channel = HTTPChannel(broker, host="0.0.0.0", port=8080)
+http_channel = HTTPChannel(broker, host="127.0.0.1", port=8080)
 await http_channel.start()
 
 # WebSocket channel for real-time streaming
-ws_channel = WebSocketChannel(broker, host="0.0.0.0", port=8081)
+ws_channel = WebSocketChannel(broker, host="127.0.0.1", port=8081)
 await ws_channel.start()
 ```
 
@@ -272,4 +272,4 @@ MIT License - see LICENSE file for details.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please feel free to submit a Pull Request.
