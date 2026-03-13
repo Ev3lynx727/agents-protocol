@@ -40,7 +40,7 @@ class ClusterPeer:
     async def forward_message(self, message: AgentMessage) -> bool:
         """Forward a message to this peer node with resilience."""
 
-        async def _forward():
+        async def _forward() -> bool:
             import httpx
 
             # In a real scenario, this would use a persistent session
@@ -54,8 +54,11 @@ class ClusterPeer:
                 return response.status_code == 200
 
         try:
+            from typing import cast
             # Wrap in both circuit breaker and retry policy
-            return await self.circuit_breaker.call(self.retry_policy.execute, _forward)
+            return cast(
+                bool, await self.circuit_breaker.call(self.retry_policy.execute, _forward)
+            )
         except CircuitBreakerError:
             logger.debug(
                 f"Circuit OPEN for peer {self.node_info.node_id}. Skipping forward."
@@ -102,7 +105,7 @@ class ClusterManager:
         self._running = False
         self._heartbeat_task: Optional[asyncio.Task] = None
 
-    async def start(self):
+    async def start(self) -> None:
         """Start the cluster manager and heartbeat loop."""
         if self._running:
             return
@@ -110,7 +113,7 @@ class ClusterManager:
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         logger.info(f"Cluster manager started for node {self.node_id}")
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop the cluster manager."""
         self._running = False
         if self._heartbeat_task:
@@ -121,7 +124,7 @@ class ClusterManager:
                 pass
         logger.info(f"Cluster manager stopped for node {self.node_id}")
 
-    async def _heartbeat_loop(self):
+    async def _heartbeat_loop(self) -> None:
         """Periodically check peer health."""
         while self._running:
             try:
@@ -153,14 +156,14 @@ class ClusterManager:
 
             await asyncio.sleep(10.0)
 
-    def add_peer(self, node_info: ClusterNodeInfo):
+    def add_peer(self, node_info: ClusterNodeInfo) -> None:
         """Add a peer to the cluster."""
         if node_info.node_id == self.node_id:
             return
         self.peers[node_info.node_id] = ClusterPeer(node_info, self.broker)
         logger.info(f"Added peer node {node_info.node_id} at {node_info.endpoint}")
 
-    def register_remote_agent(self, agent_id: str, node_id: str):
+    def register_remote_agent(self, agent_id: str, node_id: str) -> None:
         """Register an agent located on a remote node."""
         self.remote_agents[agent_id] = node_id
         logger.debug(f"Registered remote agent {agent_id} on node {node_id}")
@@ -172,7 +175,7 @@ class ClusterManager:
             return self.peers.get(node_id)
         return None
 
-    async def broadcast_to_peers(self, message: AgentMessage):
+    async def broadcast_to_peers(self, message: AgentMessage) -> None:
         """Broadcast a message to all peers in the cluster."""
         tasks = [peer.forward_message(message) for peer in self.peers.values()]
         if tasks:

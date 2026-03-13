@@ -68,16 +68,18 @@ class ValidationRule(ABC):
 class HookManager:
     """Manages lifecycle hooks for agents."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._hooks: Dict[AgentHook, List[Callable[..., Awaitable[None]]]] = {
             hook: [] for hook in AgentHook
         }
 
-    def register(self, hook: AgentHook, callback: Callable[..., Awaitable[None]]):
+    def register(
+        self, hook: AgentHook, callback: Callable[..., Awaitable[None]]
+    ) -> None:
         """Register a callback for a hook."""
         self._hooks[hook].append(callback)
 
-    async def trigger(self, hook: AgentHook, *args, **kwargs):
+    async def trigger(self, hook: AgentHook, *args: Any, **kwargs: Any) -> None:
         """Trigger all callbacks for a hook."""
         for callback in self._hooks[hook]:
             await callback(*args, **kwargs)
@@ -86,15 +88,15 @@ class HookManager:
 class ExtensionManager:
     """Registry for middleware, hooks, and plugins."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._middleware: List[BaseMiddleware] = []
         self._validation_rules: List[ValidationRule] = []
 
-    def add_middleware(self, middleware: BaseMiddleware):
+    def add_middleware(self, middleware: BaseMiddleware) -> None:
         """Add middleware to the processing chain."""
         self._middleware.append(middleware)
 
-    def add_validation_rule(self, rule: ValidationRule):
+    def add_validation_rule(self, rule: ValidationRule) -> None:
         """Add a validation rule."""
         self._validation_rules.append(rule)
 

@@ -41,9 +41,11 @@ class RetryPolicy:
         self.jitter = jitter
         self.retry_on = retry_on or [Exception]
 
-    async def execute(self, func: Callable[..., Any], *args, **kwargs) -> Any:
+    async def execute(
+        self, func: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> Any:
         """Execute a function with retries."""
-        last_exception = None
+        last_exception: Optional[Exception] = None
         for attempt in range(self.max_retries + 1):
             try:
                 return await func(*args, **kwargs)
@@ -68,7 +70,9 @@ class RetryPolicy:
                 )
                 await asyncio.sleep(delay)
 
-        raise last_exception
+        if last_exception:
+            raise last_exception
+        raise Exception("Retry policy failed without capturing an exception")
 
 
 class CircuitBreaker:
@@ -87,14 +91,14 @@ class CircuitBreaker:
         self._failure_count = 0
         self._last_failure_time = 0.0
 
-    def _on_success(self):
+    def _on_success(self) -> None:
         """Called when a call succeeds."""
         if self.state == CircuitState.HALF_OPEN:
             logger.info(f"Circuit breaker '{self.name}' RESOLVED. Closing circuit.")
             self.state = CircuitState.CLOSED
         self._failure_count = 0
 
-    def _on_failure(self):
+    def _on_failure(self) -> None:
         """Called when a call fails."""
         self._failure_count += 1
         self._last_failure_time = time.time()
@@ -111,15 +115,15 @@ class CircuitBreaker:
             )
             self.state = CircuitState.OPEN
 
-    def record_success(self):
+    def record_success(self) -> None:
         """Public method to record a successful call."""
         self._on_success()
 
-    def record_failure(self):
+    def record_failure(self) -> None:
         """Public method to record a failed call."""
         self._on_failure()
 
-    async def call(self, func: Callable[..., Any], *args, **kwargs) -> Any:
+    async def call(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """Call the function through the circuit breaker."""
         # Check if we should transition from OPEN to HALF_OPEN
         if self.state == CircuitState.OPEN:
@@ -147,7 +151,11 @@ class TimeoutManager:
         self.default_timeout = default_timeout
 
     async def run_with_timeout(
-        self, func: Callable[..., Any], timeout: Optional[float] = None, *args, **kwargs
+        self,
+        func: Callable[..., Any],
+        timeout: Optional[float] = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> Any:
         """Run an async function with a timeout."""
         t = timeout if timeout is not None else self.default_timeout

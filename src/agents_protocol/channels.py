@@ -264,7 +264,9 @@ class HTTPChannel(Channel):
             logger.error("HTTPChannel session not started")
             return False
 
-        async def _send():
+        async def _send() -> bool:
+            if not self._session:
+                return False
             response = await self._session.post(
                 endpoint, content=message.model_dump_json()
             )
@@ -272,8 +274,11 @@ class HTTPChannel(Channel):
             return response.status_code == 200
 
         try:
-            return await self.timeout_manager.run_with_timeout(
-                self.retry_policy.execute, args=(_send,)
+            return cast(
+                bool,
+                await self.timeout_manager.run_with_timeout(
+                    self.retry_policy.execute, args=(_send,)
+                ),
             )
         except Exception as e:
             logger.error(f"Failed to send message to {endpoint} after retries: {e}")
@@ -354,7 +359,7 @@ class WebSocketChannel(Channel):
         self._running = False
         logger.info("WebSocket channel stopped")
 
-    async def _handle_connection(self, websocket: Any, path: Any) -> None:
+    async def _handle_connection(self, websocket: Any, path: Optional[str] = None) -> None:
         """Handle an incoming WebSocket connection.
 
         Args:
@@ -647,7 +652,7 @@ class ChannelRegistry:
         logger.info(f"Registered channel type: {name}")
 
     @classmethod
-    def create(cls, name: str, broker: MessageBroker, **kwargs) -> Channel:
+    def create(cls, name: str, broker: MessageBroker, **kwargs: Any) -> Channel:
         """Create a channel instance by name.
 
         Args:

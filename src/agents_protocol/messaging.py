@@ -225,7 +225,10 @@ class MessageBroker:
             return msg.status
 
         # Execute middleware chain around the core send logic
-        return await self._extensions.process_with_middleware(message, _do_send)
+        return cast(
+            MessageStatus,
+            await self._extensions.process_with_middleware(message, _do_send),
+        )
 
     async def _deliver_locally(self, agent_id: str, message: AgentMessage) -> bool:
         """Deliver a message to a specific local agent's inbox.
@@ -443,7 +446,7 @@ class RouterRegistry:
         logger.info(f"Registered router type: {name}")
 
     @classmethod
-    def create(cls, name: str, **kwargs) -> MessageRouter:
+    def create(cls, name: str, **kwargs: Any) -> MessageRouter:
         """Create a router instance by name."""
         if name not in cls._routers:
             raise ValueError(f"Router type '{name}' not registered")

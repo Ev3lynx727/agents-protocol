@@ -78,8 +78,8 @@ class StreamBridgeAgent(BridgeAgent):
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
         adapter: Optional[BaseAdapter] = None,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         super().__init__(agent_id, name, adapter, **kwargs)
         self.reader = reader
         self.writer = writer

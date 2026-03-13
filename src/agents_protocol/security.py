@@ -38,11 +38,11 @@ class SecurityManager:
         )  # agent_id -> list of allowed recipient_ids (ACL)
         self._agent_keys: Dict[str, str] = {}  # agent_id -> psk
 
-    def register_agent_credentials(self, agent_id: str, psk: str):
+    def register_agent_credentials(self, agent_id: str, psk: str) -> None:
         """Register a pre-shared key for a specific agent."""
         self._agent_keys[agent_id] = psk
 
-    def set_acl(self, agent_id: str, allowed_recipients: List[str]):
+    def set_acl(self, agent_id: str, allowed_recipients: List[str]) -> None:
         """Set an Access Control List for an agent."""
         self._allowed_agents[agent_id] = allowed_recipients
 
