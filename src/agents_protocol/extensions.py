@@ -8,7 +8,6 @@ from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING, Awaitable
 
 if TYPE_CHECKING:
     from .protocol import AgentMessage
-    from .agents import Agent
 
 
 class AgentHook(Enum):
