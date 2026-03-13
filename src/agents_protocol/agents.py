@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, Optional, Any, Callable, TYPE_CHECKING
 from .protocol import AgentMessage, AgentProtocol, MessageType, MessageStatus
+from .extensions import HookManager, AgentHook
 import asyncio
 import logging
 
@@ -49,6 +50,7 @@ class Agent(AgentProtocol):
         self._inbox: asyncio.Queue = asyncio.Queue()
         self._running = False
         self._broker: Optional["MessageBroker"] = None
+        self._hooks = HookManager()
 
     def get_agent_id(self) -> str:
         """Get the unique identifier for this agent."""
@@ -72,6 +74,15 @@ class Agent(AgentProtocol):
         """
         self._message_handlers[message_type] = handler
         logger.debug(f"Registered handler for {message_type} on agent {self.agent_id}")
+
+    def register_hook(self, hook: AgentHook, callback: Callable[..., Awaitable[None]]) -> None:
+        """Register a lifecycle hook.
+        
+        Args:
+            hook: The hook type
+            callback: Async function to call
+        """
+        self._hooks.register(hook, callback)
 
     async def send_message(self, message: AgentMessage) -> MessageStatus:
         """Send a message to another agent via the broker.
@@ -126,6 +137,7 @@ class Agent(AgentProtocol):
         Args:
             message: The message to process
         """
+        await self._hooks.trigger(AgentHook.PRE_MESSAGE_PROCESS, self, message)
         try:
             handler = self._message_handlers.get(message.type)
             if handler:
@@ -148,6 +160,8 @@ class Agent(AgentProtocol):
                 )
                 error_response.type = MessageType.ERROR
                 await self.send_message(error_response)
+        finally:
+            await self._hooks.trigger(AgentHook.POST_MESSAGE_PROCESS, self, message)
 
     async def _message_loop(self) -> None:
         """Main message processing loop."""
@@ -166,6 +180,7 @@ class Agent(AgentProtocol):
         Args:
             broker: The message broker to use
         """
+        await self._hooks.trigger(AgentHook.PRE_CONNECT, self, broker)
         self._broker = broker
         if self.agent_id not in broker._agents:
             await broker.register_agent(self)
@@ -176,14 +191,17 @@ class Agent(AgentProtocol):
         # Start the message processing loop
         asyncio.create_task(self._message_loop())
         logger.info(f"Agent {self.agent_id} connected to broker")
+        await self._hooks.trigger(AgentHook.POST_CONNECT, self, broker)
 
     async def disconnect(self) -> None:
         """Disconnect the agent from the broker."""
+        await self._hooks.trigger(AgentHook.PRE_DISCONNECT, self)
         self._running = False
         if self._broker:
             await self._broker.unregister_agent(self.agent_id)
             self._broker = None
         logger.info(f"Agent {self.agent_id} disconnected")
+        await self._hooks.trigger(AgentHook.POST_DISCONNECT, self)
 
     async def is_connected(self) -> bool:
         """Check if the agent is connected."""

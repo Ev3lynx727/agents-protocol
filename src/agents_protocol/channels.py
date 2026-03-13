@@ -7,7 +7,8 @@ from typing import Optional, Dict, Any, Tuple, cast
 import asyncio
 import struct
 import logging
-from .protocol import AgentMessage, MessageStatus
+from .protocol import AgentMessage, MessageStatus, MessageType
+from .resilience import RetryPolicy, TimeoutManager
 from .messaging import MessageBroker
 
 logger = logging.getLogger(__name__)
@@ -110,6 +111,9 @@ class HTTPChannel(Channel):
         host: str = "127.0.0.1",
         port: int = 0,
         agent_id: Optional[str] = None,
+        ssl_context: Optional[ssl.SSLContext] = None,
+        pool_limits: Optional[Any] = None,  # httpx.Limits
+        timeout: float = 30.0,
     ):
         """Initialize the HTTP channel.
 
@@ -118,13 +122,21 @@ class HTTPChannel(Channel):
             host: Host to bind the HTTP server to
             port: Port to bind the HTTP server to
             agent_id: Optional agent ID for this endpoint
+            ssl_context: Optional SSL context for secure connections
+            pool_limits: Optional httpx.Limits for connection pooling
+            timeout: Default timeout for outgoing HTTP requests
         """
         super().__init__(broker)
         self.host = host
         self.port = port
         self.agent_id = agent_id
+        self.ssl_context = ssl_context
+        self.pool_limits = pool_limits
+        self.timeout = timeout
         self._server: Optional[asyncio.Server] = None
-        self._session: Optional[Any] = None  # httpx.AsyncClient
+        self._session: Optional[httpx.AsyncClient] = None
+        self.retry_policy = RetryPolicy(max_retries=3, base_delay=1.0)
+        self.timeout_manager = TimeoutManager(default_timeout=self.timeout)
 
     async def start(self) -> None:
         """Start the HTTP server."""
@@ -135,9 +147,17 @@ class HTTPChannel(Channel):
                 "httpx is required for HTTPChannel. Install with: pip install httpx"
             )
 
-        self._session = httpx.AsyncClient()
+        if self.pool_limits is None:
+            self.pool_limits = self.pool_limits or httpx.Limits(max_connections=100, max_keepalive_connections=20)
+        self.retry_policy = RetryPolicy(max_retries=3, base_delay=1.0)
+        self._session = httpx.AsyncClient(
+            verify=self.ssl_context if self.ssl_context else True,
+            limits=self.pool_limits,
+            timeout=self.timeout
+        )
         self._server = await asyncio.start_server(
-            self._handle_request, self.host, self.port
+            self._handle_request, self.host, self.port,
+            ssl=self.ssl_context
         )
 
         # Update host/port with the actual bound address (useful if port=0)
@@ -228,21 +248,34 @@ class HTTPChannel(Channel):
         if not self._running or not self._session:
             raise RuntimeError("HTTP channel is not running")
 
-        try:
-            pass
+        success = await self.send_message(message, destination)
+        if success:
+            message.status = MessageStatus.DELIVERED
+        else:
+            message.status = MessageStatus.FAILED
+        return message.status
 
-            url = destination
-            headers = {"Content-Type": "application/json"}
+    async def send_message(self, message: AgentMessage, endpoint: str) -> bool:
+        """Send a message to an external endpoint with resilience."""
+        if not self._session:
+            logger.error("HTTPChannel session not started")
+            return False
+
+        async def _send():
             response = await self._session.post(
-                url, content=message.json(), headers=headers, timeout=30.0
+                endpoint,
+                content=message.model_dump_json()
             )
             response.raise_for_status()
-            message.status = MessageStatus.DELIVERED
-            return message.status
+            return response.status_code == 200
+
+        try:
+            return await self.timeout_manager.run_with_timeout(
+                self.retry_policy.execute, args=(_send,)
+            )
         except Exception as e:
-            logger.error(f"HTTP send failed: {e}")
-            message.status = MessageStatus.FAILED
-            return message.status
+            logger.error(f"Failed to send message to {endpoint} after retries: {e}")
+            return False
 
     def get_address(self) -> Optional[Tuple[str, int]]:
         """Get the HTTP server's bound host and port."""
@@ -266,6 +299,7 @@ class WebSocketChannel(Channel):
         host: str = "127.0.0.1",
         port: int = 0,
         agent_id: Optional[str] = None,
+        ssl_context: Optional[ssl.SSLContext] = None,
     ):
         """Initialize the WebSocket channel.
 
@@ -279,6 +313,7 @@ class WebSocketChannel(Channel):
         self.host = host
         self.port = port
         self.agent_id = agent_id
+        self.ssl_context = ssl_context
         self._server: Optional[Any] = None  # websockets.server.Serve
         self._connections: Dict[str, Any] = {}  # agent_id -> WebSocket connection
 
@@ -293,7 +328,8 @@ class WebSocketChannel(Channel):
             )
 
         self._server = await websockets.serve(
-            self._handle_connection, self.host, self.port  # type: ignore[arg-type]
+            self._handle_connection, self.host, self.port,
+            ssl=self.ssl_context
         )
 
         # Update host/port with actual bound address
@@ -408,6 +444,7 @@ class TCPSocketChannel(Channel):
         host: str = "127.0.0.1",
         port: int = 0,
         agent_id: Optional[str] = None,
+        ssl_context: Optional[Any] = None,
     ):
         """Initialize the TCP Socket channel.
 
@@ -421,13 +458,15 @@ class TCPSocketChannel(Channel):
         self.host = host
         self.port = port
         self.agent_id = agent_id
+        self.ssl_context = ssl_context
         self._server: Optional[asyncio.Server] = None
         self._connections: set[asyncio.Task] = set()
 
     async def start(self) -> None:
         """Start the TCP server."""
         self._server = await asyncio.start_server(
-            self._handle_connection, self.host, self.port
+            self._handle_connection, self.host, self.port,
+            ssl=self.ssl_context
         )
 
         # Update host/port with actual bound address
@@ -560,7 +599,9 @@ class TCPSocketChannel(Channel):
 
         try:
             # We open a temporary connection for sending.
-            reader, writer = await asyncio.open_connection(host, port)
+            reader, writer = await asyncio.open_connection(
+                host, port, ssl=self.ssl_context
+            )
 
             try:
                 data = message.model_dump_json().encode()
@@ -587,3 +628,44 @@ class TCPSocketChannel(Channel):
             addr = self._server.sockets[0].getsockname()
             return cast(Tuple[str, int], addr[:2])
         return None
+
+
+class ChannelRegistry:
+    """Registry for pluggable communication channels."""
+
+    _channels: Dict[str, type[Channel]] = {}
+
+    @classmethod
+    def register(cls, name: str, channel_class: type[Channel]) -> None:
+        """Register a new channel type.
+        
+        Args:
+            name: The name of the channel type (e.g. \"kafka\")
+            channel_class: The channel class to register
+        """
+        cls._channels[name] = channel_class
+        logger.info(f"Registered channel type: {name}")
+
+    @classmethod
+    def create(cls, name: str, broker: MessageBroker, **kwargs) -> Channel:
+        """Create a channel instance by name.
+        
+        Args:
+            name: The registered name of the channel type
+            broker: The message broker to associate with the channel
+            **kwargs: Additional arguments for the channel constructor
+            
+        Returns:
+            An instance of the registered channel type
+        """
+        if name not in cls._channels:
+            raise ValueError(f"Channel type '{name}' not registered")
+        
+        return cls._channels[name](broker=broker, **kwargs)
+
+
+# Register default channels
+ChannelRegistry.register("local", LocalChannel)
+ChannelRegistry.register("http", HTTPChannel)
+ChannelRegistry.register("websocket", WebSocketChannel)
+ChannelRegistry.register("tcp", TCPSocketChannel)

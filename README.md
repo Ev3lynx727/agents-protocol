@@ -5,12 +5,25 @@ A Python library for standardized communication between AI agents using a protoc
 ## Features
 
 - **Standardized Message Format**: All agents communicate using a consistent `AgentMessage` structure
-- **Multiple Communication Channels**: Support for local (in-process), HTTP, and WebSocket channels
+- **Multiple Communication Channels**: Support for local (in-process), HTTP, WebSocket, and TCP channels
 - **Agent Registry**: Built-in registry for agent discovery and capability-based lookup
 - **Request/Response Pattern**: Built-in support for synchronous request/response messaging
+- **Persistence & History**: Built-in support for message persistence, history tracking, and replaying failed messages
+- **Security**: Comprehensive security with Authentication, AES-GCM Encryption, and ACLs
+- **Resilience**: Integrated Circuit Breakers, Retry Policies, and Metrics tracking
+- **Clustering**: Scalable distributed broker architecture with peer discovery and heartbeats
+- **Extensible**: Highly customizable via lifecycle hooks, middleware, and plugin registries
 - **Async Support**: Fully async implementation for high-performance agent communication
-- **Type Hints**: Complete type annotations for better IDE support
-- **Extensible**: Easy to extend with custom message types, channels, and agent behaviors
+
+## 📚 Documentation
+
+- [Security Guide](docs/security.md) - Authentication, Encryption, and ACLs
+- [Persistence Guide](docs/persistence.md) - History, Replay, and DLQ
+- [Resilience Guide](docs/resilience.md) - Retries, Circuit Breakers, and Metrics
+- [Clustering Guide](docs/clustering.md) - Distributed architecture and peer discovery
+- [Extension Points](docs/extensions.md) - Hooks, Middleware, and Plugins
+- [Advanced Usage](docs/advanced_usage.md) - Complex patterns and optimization
+- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
 
 ## Installation
 
@@ -206,7 +219,7 @@ ruff src tests
 
 ### Project Structure
 
-```
+```text
 agents_protocol/
 ├── src/agents_protocol/
 │   ├── __init__.py
@@ -259,4 +272,4 @@ MIT License - see LICENSE file for details.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please feel free to submit a Pull Request.

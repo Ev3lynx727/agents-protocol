@@ -59,6 +59,7 @@ class AgentMessage(BaseModel):
     reply_to: Optional[str] = None  # Message ID this is replying to
     content: Dict[str, Any] = Field(default_factory=dict)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    security: Optional[Dict[str, Any]] = None  # For auth tokens, signatures, etc.
 
     @model_validator(mode="after")
     def set_correlation_id_if_none(self) -> "AgentMessage":
@@ -77,7 +78,10 @@ class AgentMessage(BaseModel):
         return cls.model_validate_json(json_str)
 
     def create_reply(
-        self, content: Dict[str, Any], metadata: Optional[Dict[str, Any]] = None
+        self, 
+        content: Dict[str, Any], 
+        metadata: Optional[Dict[str, Any]] = None,
+        security: Optional[Dict[str, Any]] = None
     ) -> "AgentMessage":
         """Create a reply message to this one."""
         return AgentMessage(
@@ -89,6 +93,7 @@ class AgentMessage(BaseModel):
             reply_to=self.id,
             content=content,
             metadata=metadata or {},
+            security=security,
         )
 
 

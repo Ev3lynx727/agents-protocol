@@ -22,6 +22,10 @@ from .channels import (
     TCPSocketChannel,
 )
 from .persistence import MessageStore, InMemoryMessageStore
+from .adapters import BaseAdapter, JSONRPCAdapter
+from .bridge import BridgeAgent, StreamBridgeAgent
+from .security import SecurityManager, AuthStatus, TLSHelper
+from .cluster import ClusterManager, ClusterNodeInfo, ClusterPeer
 
 __all__ = [
     "__version__",
@@ -41,4 +45,14 @@ __all__ = [
     "TCPSocketChannel",
     "MessageStore",
     "InMemoryMessageStore",
+    "BaseAdapter",
+    "JSONRPCAdapter",
+    "BridgeAgent",
+    "StreamBridgeAgent",
+    "SecurityManager",
+    "AuthStatus",
+    "TLSHelper",
+    "ClusterManager",
+    "ClusterNodeInfo",
+    "ClusterPeer",
 ]
