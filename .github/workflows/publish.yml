@@ -1,0 +1,76 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - "v*.*.*"  # Trigger on version tags (e.g. v0.1.0)
+  workflow_dispatch:  # Allow manual trigger for TestPyPI testing
+
+jobs:
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Install pypa/build
+        run: pip install build
+      - name: Build a binary wheel and a source tarball
+        run: python -m build
+      - name: Store the distribution packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  publish-to-testpypi:
+    name: Publish to TestPyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/agents-protocol
+    permissions:
+      id-token: write  # MUST be present for OIDC Trusted Publishing
+    
+    # Only publish to TestPyPI during manual dispatch
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  publish-to-pypi:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/agents-protocol
+    permissions:
+      id-token: write  # MUST be present for OIDC Trusted Publishing
+    
+    # Only publish to Production PyPI when a tag is pushed
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
