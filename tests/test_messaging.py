@@ -181,15 +181,14 @@ async def test_request_response_pattern():
 
     await requester.send_message(request)
 
-    # Wait for response
-    response = None
-    for _ in range(10):  # Try for 1 second
-        response = await requester.receive_message()
-        if response and response.type == MessageType.RESPONSE:
+    # Wait for response in requester's responses list
+    for _ in range(20):  # Try for 2 seconds
+        if len(requester.responses) > 0:
             break
         await asyncio.sleep(0.1)
 
-    assert response is not None
+    assert len(requester.responses) > 0
+    response = requester.responses[0]
     assert response.type == MessageType.RESPONSE
     assert response.content == {"reply_to": "What is the answer?"}
     assert response.correlation_id == request.correlation_id
@@ -224,16 +223,13 @@ async def test_message_priority():
         await broker.send(message)
 
     # Check all messages are received with correct priority
-    received = []
+    # Use agent.received_messages to avoid race condition with its internal loop
     for _ in range(20):  # Wait up to 2 seconds
-        if len(received) >= 4:
+        if len(agent.received_messages) >= 4:
             break
-        msg = await agent.receive_message()
-        if msg:
-            received.append(msg)
-        else:
-            await asyncio.sleep(0.1)
+        await asyncio.sleep(0.1)
 
+    received = agent.received_messages
     assert len(received) == 4
     priorities = [msg.priority for msg in received]
     assert MessagePriority.LOW in priorities
