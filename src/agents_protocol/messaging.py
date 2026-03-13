@@ -56,7 +56,7 @@ class MessageBroker:
         self._message_timeout = 30.0  # seconds
         self._pending_messages: Dict[str, asyncio.Future] = {}
         self._extensions = ExtensionManager()
-        
+
         # Metrics
         self.metrics = {
             "delivered": 0,
@@ -64,7 +64,7 @@ class MessageBroker:
             "broadcast": 0,
             "forwarded": 0,
             "security_denied": 0,
-            "validation_failed": 0
+            "validation_failed": 0,
         }
 
     def add_middleware(self, middleware: BaseMiddleware) -> None:
@@ -77,7 +77,7 @@ class MessageBroker:
 
     def set_router(self, router: MessageRouter) -> None:
         """Set a custom message router.
-        
+
         Args:
             router: The router instance to use
         """
@@ -120,9 +120,10 @@ class MessageBroker:
         Returns:
             The final status of the message
         """
+
         async def _do_send(msg: AgentMessage) -> MessageStatus:
             msg.status = MessageStatus.SENT
-            
+
             # 1. Custom Validation
             valid, error = await self._extensions.validate_message(msg)
             if not valid:
@@ -138,12 +139,16 @@ class MessageBroker:
             if self._security_manager:
                 auth_status = self._security_manager.verify_message(msg)
                 if auth_status != AuthStatus.SUCCESS:
-                    logger.warning(f"Message {msg.id} failed security check: {auth_status}")
+                    logger.warning(
+                        f"Message {msg.id} failed security check: {auth_status}"
+                    )
                     msg.status = MessageStatus.FAILED
                     self.metrics["security_denied"] += 1
                     if self._store:
                         await self._store.save_message(msg)
-                        await self._store.add_to_dlq(msg, f"Security check failed: {auth_status}")
+                        await self._store.add_to_dlq(
+                            msg, f"Security check failed: {auth_status}"
+                        )
                     return msg.status
 
             if self._store:
@@ -166,24 +171,30 @@ class MessageBroker:
                         await asyncio.gather(*tasks)
                     msg.status = MessageStatus.DELIVERED
             else:
-                # Direct message - Still consult router for potentially multiple recipients 
+                # Direct message - Still consult router for potentially multiple recipients
                 # (e.g. if recipient_id is a capability pattern)
                 recipients = self._router.route(msg, list(self._agents.keys()))
-                
+
                 # If router didn't find multiple, treat as direct recipient_id
-                if not recipients or (len(recipients) == 1 and recipients[0] == msg.recipient_id):
+                if not recipients or (
+                    len(recipients) == 1 and recipients[0] == msg.recipient_id
+                ):
                     # Check local agents first
                     if await self._deliver_locally(msg.recipient_id, msg):
                         # Delivered locally, metrics updated in _deliver_locally
                         pass
                     elif self._cluster_manager:
                         # Check for remote agent on peers
-                        peer = self._cluster_manager.get_peer_for_agent(msg.recipient_id)
+                        peer = self._cluster_manager.get_peer_for_agent(
+                            msg.recipient_id
+                        )
                         if peer:
                             success = await peer.forward_message(msg)
                             if success:
                                 msg.status = MessageStatus.DELIVERED
-                                logger.info(f"Message {msg.id} forwarded to peer for agent {msg.recipient_id}")
+                                logger.info(
+                                    f"Message {msg.id} forwarded to peer for agent {msg.recipient_id}"
+                                )
                                 self.metrics["forwarded"] += 1
                             else:
                                 msg.status = MessageStatus.FAILED
@@ -192,12 +203,16 @@ class MessageBroker:
                             msg.status = MessageStatus.FAILED
                             self.metrics["failed"] += 1
                             if self._store:
-                                await self._store.add_to_dlq(msg, f"Agent {msg.recipient_id} not registered.")
+                                await self._store.add_to_dlq(
+                                    msg, f"Agent {msg.recipient_id} not registered."
+                                )
                     else:
                         msg.status = MessageStatus.FAILED
                         self.metrics["failed"] += 1
                         if self._store:
-                            await self._store.add_to_dlq(msg, f"Agent {msg.recipient_id} not registered.")
+                            await self._store.add_to_dlq(
+                                msg, f"Agent {msg.recipient_id} not registered."
+                            )
                 else:
                     # Route to multiple recipients found by router
                     tasks = []
@@ -206,7 +221,7 @@ class MessageBroker:
                     if tasks:
                         await asyncio.gather(*tasks)
                     msg.status = MessageStatus.DELIVERED
-            
+
             return msg.status
 
         # Execute middleware chain around the core send logic
@@ -228,8 +243,9 @@ class MessageBroker:
 
         try:
             import time
+
             priority_entry = (-message.priority, time.time_ns(), message)
-            
+
             await self._agent_inboxes[agent_id].put(priority_entry)
             logger.debug(f"Message {message.id} delivered locally to agent {agent_id}")
             message.status = MessageStatus.DELIVERED
@@ -240,7 +256,9 @@ class MessageBroker:
                 )
             return True
         except Exception as e:
-            logger.error(f"Failed to deliver message {message.id} locally to {agent_id}: {e}")
+            logger.error(
+                f"Failed to deliver message {message.id} locally to {agent_id}: {e}"
+            )
             message.status = MessageStatus.FAILED
             self.metrics["failed"] += 1
             if self._store:
@@ -411,8 +429,6 @@ class MessageBroker:
 
         # Manually triggering routing logic via send logic
         return await self.send(message) == MessageStatus.DELIVERED
-
-
 
 
 class RouterRegistry:

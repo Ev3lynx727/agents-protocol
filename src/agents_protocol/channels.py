@@ -148,16 +148,17 @@ class HTTPChannel(Channel):
             )
 
         if self.pool_limits is None:
-            self.pool_limits = self.pool_limits or httpx.Limits(max_connections=100, max_keepalive_connections=20)
+            self.pool_limits = self.pool_limits or httpx.Limits(
+                max_connections=100, max_keepalive_connections=20
+            )
         self.retry_policy = RetryPolicy(max_retries=3, base_delay=1.0)
         self._session = httpx.AsyncClient(
             verify=self.ssl_context if self.ssl_context else True,
             limits=self.pool_limits,
-            timeout=self.timeout
+            timeout=self.timeout,
         )
         self._server = await asyncio.start_server(
-            self._handle_request, self.host, self.port,
-            ssl=self.ssl_context
+            self._handle_request, self.host, self.port, ssl=self.ssl_context
         )
 
         # Update host/port with the actual bound address (useful if port=0)
@@ -263,8 +264,7 @@ class HTTPChannel(Channel):
 
         async def _send():
             response = await self._session.post(
-                endpoint,
-                content=message.model_dump_json()
+                endpoint, content=message.model_dump_json()
             )
             response.raise_for_status()
             return response.status_code == 200
@@ -328,8 +328,7 @@ class WebSocketChannel(Channel):
             )
 
         self._server = await websockets.serve(
-            self._handle_connection, self.host, self.port,
-            ssl=self.ssl_context
+            self._handle_connection, self.host, self.port, ssl=self.ssl_context
         )
 
         # Update host/port with actual bound address
@@ -465,8 +464,7 @@ class TCPSocketChannel(Channel):
     async def start(self) -> None:
         """Start the TCP server."""
         self._server = await asyncio.start_server(
-            self._handle_connection, self.host, self.port,
-            ssl=self.ssl_context
+            self._handle_connection, self.host, self.port, ssl=self.ssl_context
         )
 
         # Update host/port with actual bound address
@@ -638,7 +636,7 @@ class ChannelRegistry:
     @classmethod
     def register(cls, name: str, channel_class: type[Channel]) -> None:
         """Register a new channel type.
-        
+
         Args:
             name: The name of the channel type (e.g. \"kafka\")
             channel_class: The channel class to register
@@ -649,18 +647,18 @@ class ChannelRegistry:
     @classmethod
     def create(cls, name: str, broker: MessageBroker, **kwargs) -> Channel:
         """Create a channel instance by name.
-        
+
         Args:
             name: The registered name of the channel type
             broker: The message broker to associate with the channel
             **kwargs: Additional arguments for the channel constructor
-            
+
         Returns:
             An instance of the registered channel type
         """
         if name not in cls._channels:
             raise ValueError(f"Channel type '{name}' not registered")
-        
+
         return cls._channels[name](broker=broker, **kwargs)
 
 

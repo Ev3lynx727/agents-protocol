@@ -75,9 +75,11 @@ class Agent(AgentProtocol):
         self._message_handlers[message_type] = handler
         logger.debug(f"Registered handler for {message_type} on agent {self.agent_id}")
 
-    def register_hook(self, hook: AgentHook, callback: Callable[..., Awaitable[None]]) -> None:
+    def register_hook(
+        self, hook: AgentHook, callback: Callable[..., Awaitable[None]]
+    ) -> None:
         """Register a lifecycle hook.
-        
+
         Args:
             hook: The hook type
             callback: Async function to call

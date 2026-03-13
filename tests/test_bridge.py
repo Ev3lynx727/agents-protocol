@@ -6,8 +6,13 @@ import pytest
 import asyncio
 import json
 from agents_protocol import (
-    MessageBroker, Agent, AgentMessage, MessageType, 
-    JSONRPCAdapter, StreamBridgeAgent, LocalChannel
+    MessageBroker,
+    Agent,
+    AgentMessage,
+    MessageType,
+    JSONRPCAdapter,
+    StreamBridgeAgent,
+    LocalChannel,
 )
 
 
@@ -31,7 +36,7 @@ async def test_jsonrpc_adapter_translation():
         "jsonrpc": "2.0",
         "method": "test_method",
         "params": {"a": 1},
-        "id": "123"
+        "id": "123",
     }
     internal_msg = adapter.to_protocol(rpc_req)
     assert internal_msg.type == MessageType.REQUEST
@@ -55,7 +60,7 @@ async def test_bridge_agent_e2e():
 
     # 1. Setup a mock external service (Client B)
     external_received = []
-    
+
     async def server_callback(reader, writer):
         line = await reader.readline()
         if line:
@@ -65,22 +70,22 @@ async def test_bridge_agent_e2e():
             response = {
                 "jsonrpc": "2.0",
                 "id": data.get("id"),
-                "result": {"echo": data.get("params")}
+                "result": {"echo": data.get("params")},
             }
             writer.write((json.dumps(response) + "\n").encode())
             await writer.drain()
         writer.close()
         await writer.wait_closed()
 
-    server = await asyncio.start_server(server_callback, '127.0.0.1', 0)
+    server = await asyncio.start_server(server_callback, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]
-    
+
     # 2. Start the Orchestrator
     orchestrator = MockOrchestrator("orchestrator")
     await orchestrator.connect(broker)
 
     # 3. Start the Bridge Agent
-    reader, writer = await asyncio.open_connection('127.0.0.1', port)
+    reader, writer = await asyncio.open_connection("127.0.0.1", port)
     bridge = StreamBridgeAgent("bridge_b", "Bridge B", reader, writer)
     await bridge.connect(broker)
 
@@ -90,12 +95,12 @@ async def test_bridge_agent_e2e():
             type=MessageType.REQUEST,
             sender_id="orchestrator",
             recipient_id="bridge_b",
-            content={"method": "ping", "params": "hello"}
+            content={"method": "ping", "params": "hello"},
         )
         await orchestrator.send_message(req)
 
         # 5. Wait for message to reach external service and come back
-        for _ in range(50): # Wait up to 5 seconds
+        for _ in range(50):  # Wait up to 5 seconds
             if len(orchestrator.responses) >= 1:
                 break
             await asyncio.sleep(0.1)

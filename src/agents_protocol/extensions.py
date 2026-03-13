@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 class AgentHook(Enum):
     """Lifecycle hooks for agents."""
+
     PRE_CONNECT = auto()
     POST_CONNECT = auto()
     PRE_DISCONNECT = auto()
@@ -23,23 +24,21 @@ class AgentHook(Enum):
 
 class BaseMiddleware(ABC):
     """Base class for message processing middleware.
-    
+
     Middleware can intercept and transform messages before they are processed
     by the broker or the agent.
     """
 
     @abstractmethod
     async def __call__(
-        self, 
-        message: AgentMessage, 
-        next_call: Callable[[AgentMessage], Awaitable[Any]]
+        self, message: AgentMessage, next_call: Callable[[AgentMessage], Awaitable[Any]]
     ) -> Any:
         """Process a message.
-        
+
         Args:
             message: The message to process
             next_call: The next middleware or the final handler in the chain
-            
+
         Returns:
             The result of the next_call
         """
@@ -52,10 +51,10 @@ class ValidationRule(ABC):
     @abstractmethod
     async def validate(self, message: AgentMessage) -> bool:
         """Validate a message.
-        
+
         Args:
             message: The message to validate
-            
+
         Returns:
             True if valid, False otherwise
         """
@@ -100,7 +99,9 @@ class ExtensionManager:
         """Add a validation rule."""
         self._validation_rules.append(rule)
 
-    async def validate_message(self, message: AgentMessage) -> Tuple[bool, Optional[str]]:
+    async def validate_message(
+        self, message: AgentMessage
+    ) -> Tuple[bool, Optional[str]]:
         """Validate a message against all registered rules."""
         for rule in self._validation_rules:
             if not await rule.validate(message):
@@ -108,17 +109,14 @@ class ExtensionManager:
         return True, None
 
     async def process_with_middleware(
-        self, 
-        message: AgentMessage, 
-        handler: Callable[[AgentMessage], Awaitable[Any]]
+        self, message: AgentMessage, handler: Callable[[AgentMessage], Awaitable[Any]]
     ) -> Any:
         """Execute middleware chain around a handler."""
-        
+
         async def _execute_chain(index: int, msg: AgentMessage) -> Any:
             if index < len(self._middleware):
                 return await self._middleware[index](
-                    msg, 
-                    lambda m: _execute_chain(index + 1, m)
+                    msg, lambda m: _execute_chain(index + 1, m)
                 )
             return await handler(msg)
 

@@ -53,14 +53,19 @@ class BridgeAgent(Agent):
             internal_msg.sender_id = self.agent_id
 
             # Try to route response back to original requester
-            if internal_msg.type == MessageType.RESPONSE and internal_msg.correlation_id:
+            if (
+                internal_msg.type == MessageType.RESPONSE
+                and internal_msg.correlation_id
+            ):
                 recipient = self._request_map.pop(internal_msg.correlation_id, None)
                 if recipient:
                     internal_msg.recipient_id = recipient
 
             await self.send_message(internal_msg)
         except Exception as e:
-            logger.error(f"Bridge {self.agent_id} failed to process external message: {e}")
+            logger.error(
+                f"Bridge {self.agent_id} failed to process external message: {e}"
+            )
 
 
 class StreamBridgeAgent(BridgeAgent):
@@ -73,7 +78,7 @@ class StreamBridgeAgent(BridgeAgent):
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
         adapter: Optional[BaseAdapter] = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(agent_id, name, adapter, **kwargs)
         self.reader = reader

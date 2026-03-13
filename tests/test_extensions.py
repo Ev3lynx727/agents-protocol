@@ -12,7 +12,9 @@ class MockMiddleware(BaseMiddleware):
         self.called = False
         self.processed_message = None
 
-    async def __call__(self, message: AgentMessage, next_call: Callable[[AgentMessage], Awaitable[Any]]) -> Any:
+    async def __call__(
+        self, message: AgentMessage, next_call: Callable[[AgentMessage], Awaitable[Any]]
+    ) -> Any:
         self.called = True
         message.metadata["middleware_processed"] = True
         result = await next_call(message)
@@ -37,21 +39,21 @@ class MockValidationRule(ValidationRule):
 async def test_agent_lifecycle_hooks():
     broker = MessageBroker()
     agent = Agent("test_agent", "Test Agent")
-    
+
     hooks_triggered = []
-    
+
     async def hook_callback(a, *args):
         hooks_triggered.append(True)
-        
+
     agent.register_hook(AgentHook.PRE_CONNECT, hook_callback)
     agent.register_hook(AgentHook.POST_CONNECT, hook_callback)
-    
+
     await agent.connect(broker)
     assert len(hooks_triggered) == 2
-    
+
     agent.register_hook(AgentHook.PRE_DISCONNECT, hook_callback)
     agent.register_hook(AgentHook.POST_DISCONNECT, hook_callback)
-    
+
     await agent.disconnect()
     assert len(hooks_triggered) == 4
 
@@ -61,19 +63,19 @@ async def test_message_middleware():
     broker = MessageBroker()
     middleware = MockMiddleware()
     broker.add_middleware(middleware)
-    
+
     agent = Agent("agent_1", "Agent 1")
     await agent.connect(broker)
-    
+
     message = AgentMessage(
         type=MessageType.NOTIFICATION,
         sender_id="sender",
         recipient_id="agent_1",
-        content={"test": "data"}
+        content={"test": "data"},
     )
-    
+
     await broker.send(message)
-    
+
     assert middleware.called
     assert middleware.processed_message.metadata["middleware_processed"] is True
 
@@ -83,19 +85,19 @@ async def test_custom_validation():
     broker = MessageBroker()
     rule = MockValidationRule(succeed=False)
     broker.add_validation_rule(rule)
-    
+
     agent = Agent("agent_1", "Agent 1")
     await agent.connect(broker)
-    
+
     message = AgentMessage(
         type=MessageType.NOTIFICATION,
         sender_id="sender",
         recipient_id="agent_1",
-        content={"test": "data"}
+        content={"test": "data"},
     )
-    
+
     status = await broker.send(message)
-    
+
     assert rule.called
     assert status == MessageStatus.FAILED
     assert broker.metrics["validation_failed"] == 1
@@ -112,7 +114,7 @@ async def test_custom_router_plugin():
     broker = MessageBroker()
     router = CapabilityRouter()
     broker.set_router(router)
-    
+
     math_received = []
     other_received = []
 
@@ -127,26 +129,26 @@ async def test_custom_router_plugin():
     math_agent = Agent("math_expert", "Math Expert")
     math_agent.register_handler(MessageType.NOTIFICATION, math_handler)
     await math_agent.connect(broker)
-    
+
     other_agent = Agent("other", "Other Agent")
     other_agent.register_handler(MessageType.NOTIFICATION, other_handler)
     await other_agent.connect(broker)
-    
+
     message = AgentMessage(
         type=MessageType.NOTIFICATION,
         sender_id="sender",
-        content={"target_capability": "math", "op": "add"}
+        content={"target_capability": "math", "op": "add"},
     )
-    
+
     # Send broadcast (recipient_id=None)
     await broker.send(message)
-    
+
     # Wait a bit for processing
     await asyncio.sleep(0.1)
-    
+
     # Check if math_expert got it
     assert len(math_received) == 1
     assert math_received[0].content["op"] == "add"
-    
+
     # Check if other didn't get it
     assert len(other_received) == 0

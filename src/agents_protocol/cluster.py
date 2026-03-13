@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class ClusterNodeInfo(BaseModel):
     """Information about a node in the broker cluster."""
+
     node_id: str
     endpoint: str  # e.g., "http://127.0.0.1:8080"
     capabilities: List[str] = Field(default_factory=list)
@@ -32,45 +33,44 @@ class ClusterPeer:
         self.broker = broker
         self._connected = False
         self.circuit_breaker = CircuitBreaker(
-            name=f"peer-{node_info.node_id}",
-            failure_threshold=3,
-            recovery_timeout=60.0
+            name=f"peer-{node_info.node_id}", failure_threshold=3, recovery_timeout=60.0
         )
-        self.retry_policy = RetryPolicy(
-            max_retries=2,
-            base_delay=0.5,
-            jitter=True
-        )
+        self.retry_policy = RetryPolicy(max_retries=2, base_delay=0.5, jitter=True)
 
     async def forward_message(self, message: AgentMessage) -> bool:
         """Forward a message to this peer node with resilience."""
+
         async def _forward():
             import httpx
+
             # In a real scenario, this would use a persistent session or a dedicated protocol
             async with httpx.AsyncClient(timeout=2.0) as client:
                 response = await client.post(
                     f"{self.node_info.endpoint}/internal/forward",
-                    content=message.model_dump_json()
+                    content=message.model_dump_json(),
                 )
-                response.raise_for_status() # Trigger retry if not 2xx
+                response.raise_for_status()  # Trigger retry if not 2xx
                 return response.status_code == 200
 
         try:
             # Wrap in both circuit breaker and retry policy
-            return await self.circuit_breaker.call(
-                self.retry_policy.execute, _forward
-            )
+            return await self.circuit_breaker.call(self.retry_policy.execute, _forward)
         except CircuitBreakerError:
-            logger.debug(f"Circuit OPEN for peer {self.node_info.node_id}. Skipping forward.")
+            logger.debug(
+                f"Circuit OPEN for peer {self.node_info.node_id}. Skipping forward."
+            )
             return False
         except Exception as e:
-            logger.debug(f"Failed to forward message to peer {self.node_info.node_id} after retries: {e}")
+            logger.debug(
+                f"Failed to forward message to peer {self.node_info.node_id} after retries: {e}"
+            )
             return False
 
     async def send_heartbeat(self) -> bool:
         """Send a heartbeat to this peer."""
         try:
             import httpx
+
             async with httpx.AsyncClient(timeout=1.0) as client:
                 response = await client.get(f"{self.node_info.endpoint}/health")
                 if response.status_code == 200:
@@ -84,13 +84,19 @@ class ClusterPeer:
 class ClusterManager:
     """Manages the cluster state and peer connections."""
 
-    def __init__(self, broker: MessageBroker, node_id: Optional[str] = None, endpoint: Optional[str] = None):
+    def __init__(
+        self,
+        broker: MessageBroker,
+        node_id: Optional[str] = None,
+        endpoint: Optional[str] = None,
+    ):
         import uuid
+
         self.broker = broker
         self.node_id = node_id or str(uuid.uuid4())
         self.endpoint = endpoint
         self.peers: Dict[str, ClusterPeer] = {}
-        self.remote_agents: Dict[str, str] = {} # agent_id -> node_id
+        self.remote_agents: Dict[str, str] = {}  # agent_id -> node_id
         self._running = False
         self._heartbeat_task: Optional[asyncio.Task] = None
 
@@ -120,11 +126,12 @@ class ClusterManager:
                 tasks = [peer.send_heartbeat() for peer in self.peers.values()]
                 if tasks:
                     await asyncio.gather(*tasks)
-                
+
                 # Cleanup old peers (e.g., not seen for 30 seconds)
                 now = asyncio.get_event_loop().time()
                 to_remove = [
-                    node_id for node_id, peer in self.peers.items()
+                    node_id
+                    for node_id, peer in self.peers.items()
                     if now - peer.node_info.last_seen > 30.0
                 ]
                 for node_id in to_remove:
@@ -132,7 +139,8 @@ class ClusterManager:
                     del self.peers[node_id]
                     # Also cleanup remote agents associated with this node
                     agents_to_remove = [
-                        a_id for a_id, n_id in self.remote_agents.items()
+                        a_id
+                        for a_id, n_id in self.remote_agents.items()
                         if n_id == node_id
                     ]
                     for a_id in agents_to_remove:
@@ -140,7 +148,7 @@ class ClusterManager:
 
             except Exception as e:
                 logger.error(f"Error in cluster heartbeat loop: {e}")
-            
+
             await asyncio.sleep(10.0)
 
     def add_peer(self, node_info: ClusterNodeInfo):

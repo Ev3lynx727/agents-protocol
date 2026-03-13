@@ -47,7 +47,9 @@ class JSONRPCAdapter(BaseAdapter):
             msg_type = MessageType.RESPONSE
             content = result if result is not None else error
         elif method is not None:
-            msg_type = MessageType.REQUEST if msg_id is not None else MessageType.NOTIFICATION
+            msg_type = (
+                MessageType.REQUEST if msg_id is not None else MessageType.NOTIFICATION
+            )
             content = {"method": method, "params": params}
         else:
             msg_type = MessageType.NOTIFICATION
@@ -67,19 +69,27 @@ class JSONRPCAdapter(BaseAdapter):
             return {
                 "jsonrpc": "2.0",
                 "id": internal_message.correlation_id,
-                "result": internal_message.content
+                "result": internal_message.content,
             }
         elif internal_message.type == MessageType.REQUEST:
             return {
                 "jsonrpc": "2.0",
                 "method": internal_message.content.get("method", "call"),
                 "params": internal_message.content.get("params", {}),
-                "id": internal_message.id
+                "id": internal_message.id,
             }
         else:
             # For notifications or other types, treat as JSON-RPC notification
             return {
                 "jsonrpc": "2.0",
-                "method": internal_message.content.get("method", "notify") if isinstance(internal_message.content, dict) else "notify",
-                "params": internal_message.content.get("params", internal_message.content) if isinstance(internal_message.content, dict) else internal_message.content
+                "method": (
+                    internal_message.content.get("method", "notify")
+                    if isinstance(internal_message.content, dict)
+                    else "notify"
+                ),
+                "params": (
+                    internal_message.content.get("params", internal_message.content)
+                    if isinstance(internal_message.content, dict)
+                    else internal_message.content
+                ),
             }

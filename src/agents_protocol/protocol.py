@@ -78,10 +78,10 @@ class AgentMessage(BaseModel):
         return cls.model_validate_json(json_str)
 
     def create_reply(
-        self, 
-        content: Dict[str, Any], 
+        self,
+        content: Dict[str, Any],
         metadata: Optional[Dict[str, Any]] = None,
-        security: Optional[Dict[str, Any]] = None
+        security: Optional[Dict[str, Any]] = None,
     ) -> "AgentMessage":
         """Create a reply message to this one."""
         return AgentMessage(

@@ -18,6 +18,7 @@ class CircuitState(Enum):
 
 class CircuitBreakerError(Exception):
     """Exception raised when the circuit breaker is open."""
+
     pass
 
 
@@ -31,7 +32,7 @@ class RetryPolicy:
         max_delay: float = 10.0,
         exponential_base: float = 2.0,
         jitter: bool = True,
-        retry_on: Optional[List[Type[Exception]]] = None
+        retry_on: Optional[List[Type[Exception]]] = None,
     ):
         self.max_retries = max_retries
         self.base_delay = base_delay
@@ -50,24 +51,23 @@ class RetryPolicy:
                 # Check if we should retry on this exception
                 if not any(isinstance(e, ex_type) for ex_type in self.retry_on):
                     raise e
-                
+
                 last_exception = e
                 if attempt == self.max_retries:
                     break
-                
+
                 # Calculate delay
                 delay = min(
-                    self.max_delay,
-                    self.base_delay * (self.exponential_base ** attempt)
+                    self.max_delay, self.base_delay * (self.exponential_base**attempt)
                 )
                 if self.jitter:
                     delay = delay * (0.5 + random.random())
-                
+
                 logger.warning(
                     f"Attempt {attempt + 1} failed: {e}. Retrying in {delay:.2f}s..."
                 )
                 await asyncio.sleep(delay)
-        
+
         raise last_exception
 
 
@@ -78,7 +78,7 @@ class CircuitBreaker:
         self,
         failure_threshold: int = 5,
         recovery_timeout: float = 30.0,
-        name: str = "default"
+        name: str = "default",
     ):
         self.name = name
         self.failure_threshold = failure_threshold
@@ -98,12 +98,17 @@ class CircuitBreaker:
         """Called when a call fails."""
         self._failure_count += 1
         self._last_failure_time = time.time()
-        
-        if self.state == CircuitState.CLOSED and self._failure_count >= self.failure_threshold:
+
+        if (
+            self.state == CircuitState.CLOSED
+            and self._failure_count >= self.failure_threshold
+        ):
             logger.warning(f"Circuit breaker '{self.name}' TRIPPED. Opening circuit.")
             self.state = CircuitState.OPEN
         elif self.state == CircuitState.HALF_OPEN:
-            logger.warning(f"Circuit breaker '{self.name}' failed during recovery. Re-opening.")
+            logger.warning(
+                f"Circuit breaker '{self.name}' failed during recovery. Re-opening."
+            )
             self.state = CircuitState.OPEN
 
     def record_success(self):
@@ -119,7 +124,9 @@ class CircuitBreaker:
         # Check if we should transition from OPEN to HALF_OPEN
         if self.state == CircuitState.OPEN:
             if time.time() - self._last_failure_time > self.recovery_timeout:
-                logger.info(f"Circuit breaker '{self.name}' attempting recovery (HALF_OPEN).")
+                logger.info(
+                    f"Circuit breaker '{self.name}' attempting recovery (HALF_OPEN)."
+                )
                 self.state = CircuitState.HALF_OPEN
             else:
                 raise CircuitBreakerError(f"Circuit breaker '{self.name}' is OPEN")
@@ -135,11 +142,13 @@ class CircuitBreaker:
 
 class TimeoutManager:
     """Helper to manage timeouts for async operations."""
-    
+
     def __init__(self, default_timeout: float = 30.0):
         self.default_timeout = default_timeout
 
-    async def run_with_timeout(self, func: Callable[..., Any], timeout: Optional[float] = None, *args, **kwargs) -> Any:
+    async def run_with_timeout(
+        self, func: Callable[..., Any], timeout: Optional[float] = None, *args, **kwargs
+    ) -> Any:
         """Run an async function with a timeout."""
         t = timeout if timeout is not None else self.default_timeout
         try:
