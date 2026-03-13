@@ -134,7 +134,7 @@ async def test_tcp_channel_raw_read():
                 recipient_id="agent",
                 content={"key": "val"},
             )
-            payload = msg.json().encode()
+            payload = msg.model_dump_json().encode()
 
             # Pack 4-byte big-endian header
             header = struct.pack(">I", len(payload))

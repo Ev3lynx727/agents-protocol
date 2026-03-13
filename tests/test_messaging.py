@@ -225,10 +225,14 @@ async def test_message_priority():
 
     # Check all messages are received with correct priority
     received = []
-    for _ in range(4):
+    for _ in range(20):  # Wait up to 2 seconds
+        if len(received) >= 4:
+            break
         msg = await agent.receive_message()
         if msg:
             received.append(msg)
+        else:
+            await asyncio.sleep(0.1)
 
     assert len(received) == 4
     priorities = [msg.priority for msg in received]

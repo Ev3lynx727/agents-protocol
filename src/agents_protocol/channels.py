@@ -563,7 +563,7 @@ class TCPSocketChannel(Channel):
             reader, writer = await asyncio.open_connection(host, port)
 
             try:
-                data = message.json().encode()
+                data = message.model_dump_json().encode()
                 # Big-endian 4-byte unsigned integer indicating length
                 msg_length = struct.pack(">I", len(data))
 
