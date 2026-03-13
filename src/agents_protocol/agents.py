@@ -1,9 +1,12 @@
 """Agent base classes and registry for managing agents."""
 
-from typing import Dict, Optional, Any, Callable
+from typing import Dict, Optional, Any, Callable, TYPE_CHECKING
 from .protocol import AgentMessage, AgentProtocol, MessageType, MessageStatus
 import asyncio
 import logging
+
+if TYPE_CHECKING:
+    from .messaging import MessageBroker
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +46,7 @@ class Agent(AgentProtocol):
         self._message_handlers: Dict[MessageType, Callable] = {}
         self._inbox: asyncio.Queue = asyncio.Queue()
         self._running = False
-        self._broker: Optional['MessageBroker'] = None
+        self._broker: Optional["MessageBroker"] = None
 
     def get_agent_id(self) -> str:
         """Get the unique identifier for this agent."""
@@ -130,14 +133,16 @@ class Agent(AgentProtocol):
                     response_message = message.create_reply(response)
                     await self.send_message(response_message)
             else:
-                logger.warning(f"No handler registered for message type {message.type} from {message.sender_id}")
+                logger.warning(
+                    f"No handler registered for message type "
+                    f"{message.type} from {message.sender_id}"
+                )
         except Exception as e:
             logger.error(f"Error processing message {message.id}: {e}")
             # Send error response if this was a request
             if message.type == MessageType.REQUEST:
                 error_response = message.create_reply(
-                    {"error": str(e)},
-                    {"error_type": type(e).__name__}
+                    {"error": str(e)}, {"error_type": type(e).__name__}
                 )
                 error_response.type = MessageType.ERROR
                 await self.send_message(error_response)
@@ -153,7 +158,7 @@ class Agent(AgentProtocol):
                 logger.error(f"Error in message loop for agent {self.agent_id}: {e}")
                 await asyncio.sleep(0.1)
 
-    async def connect(self, broker: 'MessageBroker') -> None:
+    async def connect(self, broker: "MessageBroker") -> None:
         """Connect the agent to a message broker.
 
         Args:
@@ -182,7 +187,7 @@ class Agent(AgentProtocol):
         """Check if the agent is connected."""
         return self._running and self._broker is not None
 
-    def set_broker(self, broker: 'MessageBroker') -> None:
+    def set_broker(self, broker: "MessageBroker") -> None:
         """Set the broker for this agent (for backward compatibility)."""
         self._broker = broker
 
@@ -194,7 +199,7 @@ class AgentRegistry:
     and other agents can discover available agents and their capabilities.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the registry."""
         self._agents: Dict[str, Agent] = {}
         self._capabilities_index: Dict[str, list] = {}

@@ -1,7 +1,5 @@
 """Tests for the protocol module."""
 
-import pytest
-from datetime import datetime
 from agents_protocol.protocol import (
     AgentMessage,
     MessageType,
@@ -16,7 +14,7 @@ def test_agent_message_creation():
         type=MessageType.REQUEST,
         sender_id="agent1",
         recipient_id="agent2",
-        content={"text": "Hello"}
+        content={"text": "Hello"},
     )
 
     assert message.type == MessageType.REQUEST
@@ -35,7 +33,7 @@ def test_agent_message_serialization():
         sender_id="agent1",
         recipient_id="agent2",
         content={"result": 42},
-        metadata={"key": "value"}
+        metadata={"key": "value"},
     )
 
     json_str = original.to_json()
@@ -56,12 +54,11 @@ def test_agent_message_reply():
         sender_id="agent1",
         recipient_id="agent2",
         content={"query": "test"},
-        correlation_id="corr-123"
+        correlation_id="corr-123",
     )
 
     reply = original.create_reply(
-        content={"answer": "reply"},
-        metadata={"processed": True}
+        content={"answer": "reply"}, metadata={"processed": True}
     )
 
     assert reply.type == MessageType.RESPONSE

@@ -1,7 +1,7 @@
 """Communication channels for agent messaging."""
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any, Tuple, cast
 import asyncio
 import struct
 import logging
@@ -30,12 +30,10 @@ class Channel(ABC):
     @abstractmethod
     async def start(self) -> None:
         """Start the channel and begin listening for messages."""
-        pass
 
     @abstractmethod
     async def stop(self) -> None:
         """Stop the channel and clean up resources."""
-        pass
 
     @abstractmethod
     async def send(self, message: AgentMessage, destination: str) -> MessageStatus:
@@ -48,14 +46,13 @@ class Channel(ABC):
         Returns:
             The status of the sent message
         """
-        pass
 
     async def is_running(self) -> bool:
         """Check if the channel is running."""
         return self._running
-        
-    def get_address(self) -> Optional[tuple[str, int]]:
-        """Get the actual host and port this channel is bound to, if applicable."""
+
+    def get_address(self) -> Optional[Tuple[str, int]]:
+        """Get host and port this channel is bound to, if applicable."""
         return None
 
 
@@ -132,16 +129,19 @@ class HTTPChannel(Channel):
         try:
             import httpx
         except ImportError:
-            raise ImportError("httpx is required for HTTPChannel. Install with: pip install httpx")
+            raise ImportError(
+                "httpx is required for HTTPChannel. Install with: pip install httpx"
+            )
 
         self._session = httpx.AsyncClient()
         self._server = await asyncio.start_server(
             self._handle_request, self.host, self.port
         )
-        
+
         # Update host/port with the actual bound address (useful if port=0)
-        self.host, self.port = self._server.sockets[0].getsockname()[:2]
-        
+        addr = self._server.sockets[0].getsockname()
+        self.host, self.port = cast(Tuple[str, int], addr[:2])
+
         self._running = True
         logger.info(f"HTTP channel started on {self.host}:{self.port}")
 
@@ -155,7 +155,9 @@ class HTTPChannel(Channel):
         self._running = False
         logger.info("HTTP channel stopped")
 
-    async def _handle_request(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    async def _handle_request(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
         """Handle an incoming HTTP request.
 
         Args:
@@ -164,26 +166,27 @@ class HTTPChannel(Channel):
         """
         try:
             # Read the request
-            request_data = await reader.readuntil(b'\r\n\r\n')
-            headers, body = request_data.split(b'\r\n\r\n', 1)
+            request_data = await reader.readuntil(b"\r\n\r\n")
+            headers, body = request_data.split(b"\r\n\r\n", 1)
 
             # Parse Content-Length
             content_length = 0
-            for line in headers.decode().split('\r\n'):
-                if line.lower().startswith('content-length:'):
-                    content_length = int(line.split(':', 1)[1].strip())
+            for line in headers.decode().split("\r\n"):
+                if line.lower().startswith("content-length:"):
+                    content_length = int(line.split(":", 1)[1].strip())
 
             # Read body if present
             if content_length > 0:
                 body += await reader.readexactly(content_length)
 
             # Parse the request
-            request_line = headers.decode().split('\r\n')[0]
-            method, path, _ = request_line.split(' ')
+            request_line = headers.decode().split("\r\n")[0]
+            method, path, _ = request_line.split(" ")
 
-            if method == 'POST' and path == '/message':
+            if method == "POST" and path == "/message":
                 # Handle incoming message
                 import json
+
                 message_data = json.loads(body.decode())
                 message = AgentMessage(**message_data)
 
@@ -191,20 +194,17 @@ class HTTPChannel(Channel):
                 await self.broker.send(message)
 
                 # Send response
-                response = {
-                    "status": "ok",
-                    "message_id": message.id
-                }
+                response = {"status": "ok", "message_id": message.id}
                 response_bytes = json.dumps(response).encode()
                 writer.write(
-                    b'HTTP/1.1 200 OK\r\n'
-                    b'Content-Type: application/json\r\n'
-                    b'Content-Length: ' + str(len(response_bytes)).encode() + b'\r\n'
-                    b'\r\n' + response_bytes
+                    b"HTTP/1.1 200 OK\r\n"
+                    b"Content-Type: application/json\r\n"
+                    b"Content-Length: " + str(len(response_bytes)).encode() + b"\r\n"
+                    b"\r\n" + response_bytes
                 )
             else:
                 # 404 Not Found
-                writer.write(b'HTTP/1.1 404 Not Found\r\n\r\n')
+                writer.write(b"HTTP/1.1 404 Not Found\r\n\r\n")
 
             await writer.drain()
         except Exception as e:
@@ -227,14 +227,12 @@ class HTTPChannel(Channel):
             raise RuntimeError("HTTP channel is not running")
 
         try:
-            import json
+            pass
+
             url = destination
-            headers = {'Content-Type': 'application/json'}
+            headers = {"Content-Type": "application/json"}
             response = await self._session.post(
-                url,
-                content=message.json(),
-                headers=headers,
-                timeout=30.0
+                url, content=message.json(), headers=headers, timeout=30.0
             )
             response.raise_for_status()
             message.status = MessageStatus.DELIVERED
@@ -244,10 +242,12 @@ class HTTPChannel(Channel):
             message.status = MessageStatus.FAILED
             return message.status
 
-    def get_address(self) -> Optional[tuple[str, int]]:
+    def get_address(self) -> Optional[Tuple[str, int]]:
         """Get the HTTP server's bound host and port."""
         if self._server and self._server.sockets:
-            return self._server.sockets[0].getsockname()[:2]
+            # cast to Tuple[str, int] for mypy
+            addr = self._server.sockets[0].getsockname()
+            return cast(Tuple[str, int], addr[:2])
         return None
 
 
@@ -285,17 +285,19 @@ class WebSocketChannel(Channel):
         try:
             import websockets
         except ImportError:
-            raise ImportError("websockets is required for WebSocketChannel. Install with: pip install websockets")
+            raise ImportError(
+                "websockets is required for WebSocketChannel. "
+                "Install with: pip install websockets"
+            )
 
         self._server = await websockets.serve(
-            self._handle_connection,
-            self.host,
-            self.port
+            self._handle_connection, self.host, self.port  # type: ignore[arg-type]
         )
-        
+
         # Update host/port with actual bound address
-        self.host, self.port = self._server.sockets[0].getsockname()[:2]
-        
+        addr = self._server.sockets[0].getsockname()
+        self.host, self.port = cast(Tuple[str, int], addr[:2])
+
         self._running = True
         logger.info(f"WebSocket channel started on {self.host}:{self.port}")
 
@@ -313,7 +315,7 @@ class WebSocketChannel(Channel):
         self._running = False
         logger.info("WebSocket channel stopped")
 
-    async def _handle_connection(self, websocket, path) -> None:
+    async def _handle_connection(self, websocket: Any, path: Any) -> None:
         """Handle an incoming WebSocket connection.
 
         Args:
@@ -325,18 +327,18 @@ class WebSocketChannel(Channel):
             # First message should be agent identification
             message = await websocket.recv()
             import json
+
             data = json.loads(message)
 
-            if data.get('type') == 'identify':
-                agent_id = data.get('agent_id')
+            if data.get("type") == "identify":
+                agent_id = data.get("agent_id")
                 self._connections[agent_id] = websocket
                 logger.info(f"Agent {agent_id} connected via WebSocket")
 
                 # Send acknowledgment
-                await websocket.send(json.dumps({
-                    "type": "connected",
-                    "agent_id": agent_id
-                }))
+                await websocket.send(
+                    json.dumps({"type": "connected", "agent_id": agent_id})
+                )
 
                 # Listen for messages
                 async for message in websocket:
@@ -371,7 +373,8 @@ class WebSocketChannel(Channel):
             return message.status
 
         try:
-            import json
+            pass
+
             ws = self._connections[destination]
             await ws.send(message.json())
             message.status = MessageStatus.DELIVERED
@@ -381,10 +384,12 @@ class WebSocketChannel(Channel):
             message.status = MessageStatus.FAILED
             return message.status
 
-    def get_address(self) -> Optional[tuple[str, int]]:
+    def get_address(self) -> Optional[Tuple[str, int]]:
         """Get the WebSocket server's bound host and port."""
         if self._server and self._server.sockets:
-            return self._server.sockets[0].getsockname()[:2]
+            # cast to Tuple[str, int] for mypy
+            addr = self._server.sockets[0].getsockname()
+            return cast(Tuple[str, int], addr[:2])
         return None
 
 
@@ -422,10 +427,11 @@ class TCPSocketChannel(Channel):
         self._server = await asyncio.start_server(
             self._handle_connection, self.host, self.port
         )
-        
+
         # Update host/port with actual bound address
-        self.host, self.port = self._server.sockets[0].getsockname()[:2]
-        
+        addr = self._server.sockets[0].getsockname()
+        self.host, self.port = cast(Tuple[str, int], addr[:2])
+
         self._running = True
         logger.info(f"TCP Socket channel started on {self.host}:{self.port}")
 
@@ -434,25 +440,27 @@ class TCPSocketChannel(Channel):
         if self._server:
             self._server.close()
             await self._server.wait_closed()
-            
+
         # Cancel any active connection handler tasks
         for task in self._connections:
             if not task.done():
                 task.cancel()
-                
+
         if self._connections:
             await asyncio.gather(*self._connections, return_exceptions=True)
             self._connections.clear()
-            
+
         self._running = False
         logger.info("TCP Socket channel stopped")
 
-    async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    async def _handle_connection(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
         """Handle an incoming TCP connection task wrapper to track tasks."""
         task = asyncio.current_task()
         if task:
             self._connections.add(task)
-            
+
         try:
             await self._process_stream(reader, writer)
         except asyncio.CancelledError:
@@ -466,11 +474,13 @@ class TCPSocketChannel(Channel):
             except Exception:
                 pass
 
-    async def _process_stream(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    async def _process_stream(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
         """Process messages from the incoming stream until the connection closes."""
         peername = writer.get_extra_info("peername")
         logger.debug(f"TCP connection accepted from {peername}")
-        
+
         try:
             while self._running:
                 # Read 4-byte message length
@@ -479,46 +489,50 @@ class TCPSocketChannel(Channel):
                 except asyncio.IncompleteReadError:
                     # Connection closed by peer
                     break
-                    
+
                 if not raw_msglen:
                     break
-                    
-                msglen = struct.unpack('>I', raw_msglen)[0]
-                
+
+                msglen = struct.unpack(">I", raw_msglen)[0]
+
                 # Protect against incredibly large messages (e.g. 10MB limit)
                 if msglen > 10 * 1024 * 1024:
-                    logger.warning(f"Message from {peername} exceeds length limit: {msglen} bytes")
+                    logger.warning(
+                        f"Message from {peername} exceeds length limit: {msglen} bytes"
+                    )
                     break
-                
+
                 # Read actual message payload
                 try:
                     data = await reader.readexactly(msglen)
                 except asyncio.IncompleteReadError:
                     break
-                    
+
                 import json
+
                 try:
                     msg_dict = json.loads(data.decode())
                     message = AgentMessage(**msg_dict)
-                    
+
                     # Deliver to our local broker
                     await self.broker.send(message)
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to parse JSON message from {peername}: {e}")
                 except Exception as e:
                     logger.error(f"Error handling message from {peername}: {e}")
-                    
+
         except asyncio.CancelledError:
             pass
         except Exception as e:
             logger.error(f"TCP stream error with {peername}: {e}")
-            
+
     async def send(self, message: AgentMessage, destination: str) -> MessageStatus:
         """Send a message via TCP to another agent.
 
         Args:
             message: The message to send
-            destination: The target host and port format "host:port", e.g. "127.0.0.1:8082"
+            destination: The target host and port format "host:port",
+                e.g. "127.0.0.1:8082"
 
         Returns:
             The status of the sent message
@@ -529,40 +543,45 @@ class TCPSocketChannel(Channel):
         try:
             host, port_str = destination.split(":")
             port = int(port_str)
-            
-            # Windows asyncio.open_connection fails with WinError 1214 if host is "0.0.0.0"
+
+            # Windows asyncio.open_connection fails with WinError 1214 if
+            # host is "0.0.0.0"
             if host == "0.0.0.0":
                 host = "127.0.0.1"
-                
+
         except ValueError:
-            logger.error(f"Invalid TCP destination format: {destination}. Expected 'host:port'")
+            logger.error(
+                f"Invalid TCP destination format: {destination}. Expected 'host:port'"
+            )
             message.status = MessageStatus.FAILED
             return message.status
 
         try:
             # We open a temporary connection for sending.
             reader, writer = await asyncio.open_connection(host, port)
-            
+
             try:
                 data = message.json().encode()
                 # Big-endian 4-byte unsigned integer indicating length
-                msg_length = struct.pack('>I', len(data))
-                
+                msg_length = struct.pack(">I", len(data))
+
                 writer.write(msg_length + data)
                 await writer.drain()
                 message.status = MessageStatus.DELIVERED
             finally:
                 writer.close()
                 await writer.wait_closed()
-                
+
             return message.status
         except Exception as e:
             logger.error(f"TCP send to {destination} failed: {e}")
             message.status = MessageStatus.FAILED
             return message.status
 
-    def get_address(self) -> Optional[tuple[str, int]]:
+    def get_address(self) -> Optional[Tuple[str, int]]:
         """Get the TCP server's bound host and port."""
         if self._server and self._server.sockets:
-            return self._server.sockets[0].getsockname()[:2]
+            # cast to Tuple[str, int] for mypy
+            addr = self._server.sockets[0].getsockname()
+            return cast(Tuple[str, int], addr[:2])
         return None

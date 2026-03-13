@@ -4,11 +4,12 @@ from enum import Enum
 from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field, model_validator
 import uuid
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 
 
 class MessageType(str, Enum):
     """Types of messages that can be exchanged between agents."""
+
     REQUEST = "request"
     RESPONSE = "response"
     NOTIFICATION = "notification"
@@ -18,6 +19,7 @@ class MessageType(str, Enum):
 
 class MessagePriority(int, Enum):
     """Priority levels for messages."""
+
     LOW = 1
     NORMAL = 5
     HIGH = 10
@@ -26,6 +28,7 @@ class MessagePriority(int, Enum):
 
 class MessageStatus(str, Enum):
     """Status of a message in its lifecycle."""
+
     PENDING = "pending"
     SENT = "sent"
     DELIVERED = "delivered"
@@ -42,20 +45,21 @@ class AgentMessage(BaseModel):
     It provides a consistent format that can be serialized/deserialized
     across different communication channels.
     """
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     type: MessageType
     sender_id: str
     recipient_id: Optional[str] = None  # None means broadcast
     priority: MessagePriority = MessagePriority.NORMAL
     status: MessageStatus = MessageStatus.PENDING
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     correlation_id: Optional[str] = None  # For request/response tracking
     reply_to: Optional[str] = None  # Message ID this is replying to
     content: Dict[str, Any] = Field(default_factory=dict)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    @model_validator(mode='after')
-    def set_correlation_id_if_none(self) -> 'AgentMessage':
+    @model_validator(mode="after")
+    def set_correlation_id_if_none(self) -> "AgentMessage":
         """If no correlation_id, use the message id."""
         if self.correlation_id is None:
             self.correlation_id = self.id
@@ -66,11 +70,13 @@ class AgentMessage(BaseModel):
         return self.model_dump_json()
 
     @classmethod
-    def from_json(cls, json_str: str) -> 'AgentMessage':
+    def from_json(cls, json_str: str) -> "AgentMessage":
         """Deserialize message from JSON string."""
         return cls.model_validate_json(json_str)
 
-    def create_reply(self, content: Dict[str, Any], metadata: Optional[Dict[str, Any]] = None) -> 'AgentMessage':
+    def create_reply(
+        self, content: Dict[str, Any], metadata: Optional[Dict[str, Any]] = None
+    ) -> "AgentMessage":
         """Create a reply message to this one."""
         return AgentMessage(
             type=MessageType.RESPONSE,
@@ -116,19 +122,19 @@ class AgentProtocol:
         Args:
             message: The message to broadcast
         """
-        raise NotImplementedError("Agents must implement broadcast if broadcasting is supported")
+        raise NotImplementedError(
+            "Agents must implement broadcast if broadcasting is supported"
+        )
 
     def get_agent_id(self) -> str:
         """Get the unique identifier for this agent."""
         raise NotImplementedError("Agents must implement get_agent_id")
 
-    async def connect(self) -> None:
+    async def connect(self, broker: Any) -> None:
         """Establish connection to the communication network."""
-        pass
 
     async def disconnect(self) -> None:
         """Disconnect from the communication network."""
-        pass
 
     async def is_connected(self) -> bool:
         """Check if the agent is connected."""

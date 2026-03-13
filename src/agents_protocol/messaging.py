@@ -1,13 +1,13 @@
 """Message broker and routing for agent communication."""
 
-from typing import Dict, Optional, Callable, Any, List
-from .protocol import AgentMessage, MessageStatus, MessageType
-from .agents import Agent, AgentRegistry
-from .persistence import MessageStore
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timedelta
+from typing import Dict, Optional, Callable, Any, List, cast
+
+from .protocol import AgentMessage, MessageStatus, MessageType
+from .persistence import MessageStore
+from .agents import Agent, AgentRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ class MessageBroker:
             The final status of the message
         """
         message.status = MessageStatus.SENT
-        
+
         if self._store:
             await self._store.save_message(message)
 
@@ -89,7 +89,7 @@ class MessageBroker:
             # Direct message
             await self._deliver_to_agent(message.recipient_id, message)
             # DELIVERED is functionally set inside _deliver_to_agent or marked FAILED
-            
+
         return message.status
 
     async def _deliver_to_agent(self, agent_id: str, message: AgentMessage) -> bool:
@@ -106,8 +106,12 @@ class MessageBroker:
             logger.warning(f"Agent {agent_id} not found for message {message.id}")
             message.status = MessageStatus.FAILED
             if self._store:
-                await self._store.update_message_status(message.id, MessageStatus.FAILED)
-                await self._store.add_to_dlq(message, f"Agent {agent_id} not registered.")
+                await self._store.update_message_status(
+                    message.id, MessageStatus.FAILED
+                )
+                await self._store.add_to_dlq(
+                    message, f"Agent {agent_id} not registered."
+                )
             return False
 
         try:
@@ -115,13 +119,17 @@ class MessageBroker:
             logger.debug(f"Message {message.id} delivered to agent {agent_id}")
             message.status = MessageStatus.DELIVERED
             if self._store:
-                await self._store.update_message_status(message.id, MessageStatus.DELIVERED)
+                await self._store.update_message_status(
+                    message.id, MessageStatus.DELIVERED
+                )
             return True
         except Exception as e:
             logger.error(f"Failed to deliver message {message.id} to {agent_id}: {e}")
             message.status = MessageStatus.FAILED
             if self._store:
-                await self._store.update_message_status(message.id, MessageStatus.FAILED)
+                await self._store.update_message_status(
+                    message.id, MessageStatus.FAILED
+                )
                 await self._store.add_to_dlq(message, str(e))
             return False
 
@@ -183,7 +191,7 @@ class MessageBroker:
 
         correlation_id = str(uuid.uuid4())
 
-        request_msg = AgentMessage(
+        _ = AgentMessage(
             type=message_type,
             sender_id="",  # Will be set by the sending agent
             recipient_id=recipient_id,
@@ -237,11 +245,10 @@ class MessageBroker:
             return None
 
         try:
-            message = await asyncio.wait_for(
-                self._agent_inboxes[agent_id].get(),
-                timeout=0.1
+            msg = await asyncio.wait_for(
+                self._agent_inboxes[agent_id].get(), timeout=0.1
             )
-            return message
+            return cast(AgentMessage, msg)
         except asyncio.TimeoutError:
             return None
 
@@ -283,14 +290,14 @@ class MessageBroker:
         # Pre-cleanup the message state prior to re-attempting routing
         message.status = MessageStatus.PENDING
         await self._store.remove_from_dlq(message.id)
-        
-        # Manually triggering _deliver_to_agent preserves the original IDs and intent completely
+
+        # Manually triggering _deliver_to_agent preserves original IDs/intent
         if message.recipient_id is None:
             await self._broadcast(message)
             message.status = MessageStatus.DELIVERED
         else:
             await self._deliver_to_agent(message.recipient_id, message)
-            
+
         return message.status == MessageStatus.DELIVERED
 
 
@@ -301,12 +308,12 @@ class MessageRouter:
     beyond simple direct addressing.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the router."""
         self._routes: Dict[str, list] = {}  # capability -> list of agent_ids
         self._filters: list = []
 
-    def add_route(self, pattern: str, agent_ids: list) -> None:
+    def add_route(self, pattern: str, agent_ids: List[str]) -> None:
         """Add a routing rule.
 
         Args:
@@ -319,11 +326,11 @@ class MessageRouter:
         """Add a message filter.
 
         Args:
-            filter_func: Function that takes a message and returns True if it should be routed
+            filter_func: Function that returns True if message should be routed
         """
         self._filters.append(filter_func)
 
-    def route(self, message: AgentMessage, available_agents: list) -> list:
+    def route(self, message: AgentMessage, available_agents: List[str]) -> List[str]:
         """Route a message to appropriate agents based on rules.
 
         Args:
@@ -333,17 +340,20 @@ class MessageRouter:
         Returns:
             List of agent IDs that should receive the message
         """
-        recipients = []
+        recipients: List[str] = []
 
         # Check routing rules
         for pattern, agent_ids in self._routes.items():
             if self._match_pattern(pattern, message):
-                recipients.extend(agent_id for agent_id in agent_ids if agent_id in available_agents)
+                recipients.extend(
+                    agent_id for agent_id in agent_ids if agent_id in available_agents
+                )
 
         # Apply filters
         if self._filters:
             recipients = [
-                agent_id for agent_id in recipients
+                agent_id
+                for agent_id in recipients
                 if all(filter_func(message) for filter_func in self._filters)
             ]
 
@@ -361,7 +371,7 @@ class MessageRouter:
         """
         # Simple pattern matching - can be extended
         if pattern.startswith("capability:"):
-            capability = pattern.split(":", 1)[1]
+            _ = pattern.split(":", 1)[1]
             # This would need access to agent registry to check capabilities
             return True  # Placeholder
         return False

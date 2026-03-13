@@ -3,8 +3,13 @@
 import pytest
 import asyncio
 from agents_protocol.messaging import MessageBroker
-from agents_protocol.agents import Agent, AgentRegistry
-from agents_protocol.protocol import AgentMessage, MessageType, MessagePriority, MessageStatus
+from agents_protocol.agents import Agent
+from agents_protocol.protocol import (
+    AgentMessage,
+    MessageType,
+    MessagePriority,
+    MessageStatus,
+)
 from agents_protocol.channels import LocalChannel
 
 
@@ -78,7 +83,7 @@ async def test_local_channel_message_delivery():
         type=MessageType.REQUEST,
         sender_id="agent1",
         recipient_id="agent2",
-        content={"test": "data"}
+        content={"test": "data"},
     )
 
     status = await agent1.send_message(message)
@@ -119,7 +124,7 @@ async def test_broadcast():
         type=MessageType.NOTIFICATION,
         sender_id="agent1",
         recipient_id=None,  # Broadcast
-        content={"broadcast": "test"}
+        content={"broadcast": "test"},
     )
 
     await agent1.broadcast(message)
@@ -134,7 +139,7 @@ async def test_broadcast():
     assert len(agent3.received_messages) == 1
     assert agent3.received_messages[0].content == {"broadcast": "test"}
 
-    # Agent1 should not have received its own broadcast (message_loop processes it but filters sender)
+    # Agent1 should not have received its own broadcast (filtering)
     # Actually agent1 will receive it since the broadcast puts it in all inboxes
     # Let's just verify the content
     if len(agent1.received_messages) > 0:
@@ -169,7 +174,7 @@ async def test_request_response_pattern():
         type=MessageType.REQUEST,
         sender_id="requester",
         recipient_id="responder",
-        content={"query": "What is the answer?"}
+        content={"query": "What is the answer?"},
     )
 
     await requester.send_message(request)
@@ -200,13 +205,18 @@ async def test_message_priority():
     await agent.connect(broker)
     await channel.start()
 
-    for priority in [MessagePriority.LOW, MessagePriority.NORMAL, MessagePriority.HIGH, MessagePriority.CRITICAL]:
+    for priority in [
+        MessagePriority.LOW,
+        MessagePriority.NORMAL,
+        MessagePriority.HIGH,
+        MessagePriority.CRITICAL,
+    ]:
         message = AgentMessage(
             type=MessageType.NOTIFICATION,
             sender_id="sender",
             recipient_id="agent",
             priority=priority,
-            content={"priority": priority.value}
+            content={"priority": priority.value},
         )
 
         await broker.send(message)

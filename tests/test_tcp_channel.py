@@ -2,7 +2,6 @@
 
 import pytest
 import asyncio
-import json
 import struct
 from agents_protocol.messaging import MessageBroker
 from agents_protocol.agents import Agent
@@ -44,7 +43,7 @@ async def test_tcp_channel_lifecycle():
         assert channel._server.is_serving()
     finally:
         await channel.stop()
-        
+
     assert channel._running is False
     assert len(channel._connections) == 0
 
@@ -58,20 +57,21 @@ async def test_tcp_channel_message_delivery():
     # Agent 1 (sender) uses broker 1
     agent1 = SimpleAgent("agent1")
     await agent1.connect(broker1)
-    
+
     # Agent 2 (receiver) uses broker 2 and listens on a TCP channel
     agent2 = SimpleAgent("agent2")
     await agent2.connect(broker2)
-    
+
     # Let OS pick a free port for receiver
     channel2 = TCPSocketChannel(broker2, host="127.0.0.1", port=0)
     await channel2.start()
-    
+
     # Get the actual port assigned to receiver
     host, port = channel2._server.sockets[0].getsockname()
     destination = f"{host}:{port}"
-    
-    # Sender channel doesn't strictly need to start a server just to send, but it needs to be "running"
+
+    # Sender channel doesn't strictly need to start a server just to send,
+    # but it needs to be "running"
     channel1 = TCPSocketChannel(broker1, host="127.0.0.1", port=0)
     await channel1.start()
 
@@ -81,7 +81,7 @@ async def test_tcp_channel_message_delivery():
             type=MessageType.NOTIFICATION,
             sender_id="agent1",
             recipient_id="agent2",
-            content={"test": "tcp_data"}
+            content={"test": "tcp_data"},
         )
 
         # Agent 1 sends via channel 1 directly to Agent 2's destination
@@ -108,50 +108,50 @@ async def test_tcp_channel_message_delivery():
 
 @pytest.mark.asyncio
 async def test_tcp_channel_raw_read():
-    """Test the raw length-prefixed framing by manually connecting a socket to the channel."""
+    """Test raw length-prefixed framing by connecting socket to channel."""
     broker = MessageBroker()
     agent = SimpleAgent("agent")
     await agent.connect(broker)
-    
+
     channel = TCPSocketChannel(broker, host="127.0.0.1", port=0)
     await channel.start()
-    
+
     try:
         host, port = channel._server.sockets[0].getsockname()
         if host == "0.0.0.0":
             host = "127.0.0.1"
-        
+
         # Connect raw socket using asyncio directly
         reader, writer = await asyncio.open_connection(host, port)
-        
+
         try:
             # Craft raw payload
             msg = AgentMessage(
                 type=MessageType.NOTIFICATION,
                 sender_id="test_raw",
                 recipient_id="agent",
-                content={"key": "val"}
+                content={"key": "val"},
             )
             payload = msg.json().encode()
-            
+
             # Pack 4-byte big-endian header
             header = struct.pack(">I", len(payload))
-            
+
             # Send
             writer.write(header + payload)
             await writer.drain()
-            
+
             # Wait for broker
             await asyncio.sleep(0.3)
-            
+
             # Verify handler processed it
             assert len(agent.received_messages) == 1
             assert agent.received_messages[0].sender_id == "test_raw"
             assert agent.received_messages[0].content == {"key": "val"}
-            
+
         finally:
             writer.close()
             await writer.wait_closed()
-            
+
     finally:
         await channel.stop()

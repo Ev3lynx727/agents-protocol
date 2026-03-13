@@ -46,3 +46,8 @@ Thumbs.db
 
 # Project specific
 *.log
+
+# Agents
+.agents/
+.drafts/
+.old/

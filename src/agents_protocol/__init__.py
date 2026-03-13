@@ -14,8 +14,15 @@ from .protocol import (
 )
 from .agents import Agent, AgentRegistry
 from .messaging import MessageBroker, MessageRouter
-from .channels import Channel, LocalChannel, HTTPChannel, WebSocketChannel, TCPSocketChannel
+from .channels import (
+    Channel,
+    LocalChannel,
+    HTTPChannel,
+    WebSocketChannel,
+    TCPSocketChannel,
+)
 from .persistence import MessageStore, InMemoryMessageStore
+
 __all__ = [
     "__version__",
     "AgentMessage",
@@ -26,6 +33,7 @@ __all__ = [
     "Agent",
     "AgentRegistry",
     "MessageBroker",
+    "MessageRouter",
     "Channel",
     "LocalChannel",
     "HTTPChannel",

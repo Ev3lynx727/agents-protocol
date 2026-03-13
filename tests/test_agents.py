@@ -1,17 +1,30 @@
 """Tests for the agents module."""
 
 import pytest
-import asyncio
 from typing import Dict, Any, Optional
 from agents_protocol.agents import Agent, AgentRegistry
-from agents_protocol.protocol import AgentMessage, MessageType, MessageStatus, MessagePriority
+from agents_protocol.protocol import (
+    AgentMessage,
+    MessageType,
+)
 
 
 class MockAgent(Agent):
     """Test agent implementation."""
 
-    def __init__(self, agent_id: str, name: str, capabilities: Optional[list] = None, metadata: Optional[Dict[str, Any]] = None):
-        super().__init__(agent_id, name, capabilities=capabilities or ["test"], metadata=metadata or {})
+    def __init__(
+        self,
+        agent_id: str,
+        name: str,
+        capabilities: Optional[list] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
+        super().__init__(
+            agent_id,
+            name,
+            capabilities=capabilities or ["test"],
+            metadata=metadata or {},
+        )
         self.received_messages = []
         self.register_handler(MessageType.REQUEST, self.handle_request)
 
@@ -38,11 +51,7 @@ async def test_agent_creation():
 @pytest.mark.asyncio
 async def test_agent_info():
     """Test getting agent info."""
-    agent = MockAgent(
-        "test-agent-2",
-        "Test Agent 2",
-        metadata={"version": "1.0"}
-    )
+    agent = MockAgent("test-agent-2", "Test Agent 2", metadata={"version": "1.0"})
     info = agent.get_info()
     assert info["agent_id"] == "test-agent-2"
     assert info["name"] == "Test Agent 2"
