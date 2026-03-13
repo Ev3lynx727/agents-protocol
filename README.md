@@ -28,7 +28,7 @@ A Python library for standardized communication between AI agents using a protoc
 ## Installation
 
 ```bash
-pip install agents-protocol
+pip install agents-sdk-py
 ```
 
 ## Quick Start
