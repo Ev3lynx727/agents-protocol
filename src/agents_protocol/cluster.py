@@ -1,6 +1,8 @@
 """Clustering and peer-to-peer logic for distributed brokers."""
 
 from __future__ import annotations
+import httpx
+import uuid
 
 import asyncio
 import logging
@@ -22,15 +24,21 @@ class ClusterNodeInfo(BaseModel):
     node_id: str
     endpoint: str  # e.g., "http://127.0.0.1:8080"
     capabilities: List[str] = Field(default_factory=list)
-    last_seen: float = Field(default_factory=lambda: asyncio.get_event_loop().time())
+    last_seen: float = Field(default_factory=lambda: asyncio.get_running_loop().time())
 
 
 class ClusterPeer:
     """Represents a connection to a peer broker in the cluster."""
 
-    def __init__(self, node_info: ClusterNodeInfo, broker: MessageBroker):
+    def __init__(
+        self,
+        node_info: ClusterNodeInfo,
+        broker: MessageBroker,
+        client: httpx.AsyncClient,
+    ):
         self.node_info = node_info
         self.broker = broker
+        self.client = client
         self._connected = False
         self.circuit_breaker = CircuitBreaker(
             name=f"peer-{node_info.node_id}", failure_threshold=3, recovery_timeout=60.0
@@ -41,17 +49,13 @@ class ClusterPeer:
         """Forward a message to this peer node with resilience."""
 
         async def _forward() -> bool:
-            import httpx
-
-            # In a real scenario, this would use a persistent session
-            # or a dedicated protocol
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                response = await client.post(
-                    f"{self.node_info.endpoint}/internal/forward",
-                    content=message.model_dump_json(),
-                )
-                response.raise_for_status()  # Trigger retry if not 2xx
-                return response.status_code == 200
+            # Use the persistent client for connection pooling
+            response = await self.client.post(
+                f"{self.node_info.endpoint}/internal/forward",
+                content=message.model_dump_json(),
+            )
+            response.raise_for_status()  # Trigger retry if not 2xx
+            return response.status_code == 200
 
         try:
             from typing import cast
@@ -76,14 +80,11 @@ class ClusterPeer:
     async def send_heartbeat(self) -> bool:
         """Send a heartbeat to this peer."""
         try:
-            import httpx
-
-            async with httpx.AsyncClient(timeout=1.0) as client:
-                response = await client.get(f"{self.node_info.endpoint}/health")
-                if response.status_code == 200:
-                    self.node_info.last_seen = asyncio.get_event_loop().time()
-                    return True
-                return False
+            response = await self.client.get(f"{self.node_info.endpoint}/health")
+            if response.status_code == 200:
+                self.node_info.last_seen = asyncio.get_running_loop().time()
+                return True
+            return False
         except Exception:
             return False
 
@@ -97,8 +98,6 @@ class ClusterManager:
         node_id: Optional[str] = None,
         endpoint: Optional[str] = None,
     ):
-        import uuid
-
         self.broker = broker
         self.node_id = node_id or str(uuid.uuid4())
         self.endpoint = endpoint
@@ -106,11 +105,13 @@ class ClusterManager:
         self.remote_agents: Dict[str, str] = {}  # agent_id -> node_id
         self._running = False
         self._heartbeat_task: Optional[asyncio.Task] = None
+        self._client: Optional[httpx.AsyncClient] = None
 
     async def start(self) -> None:
         """Start the cluster manager and heartbeat loop."""
         if self._running:
             return
+        self._client = httpx.AsyncClient(timeout=2.0)
         self._running = True
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         logger.info(f"Cluster manager started for node {self.node_id}")
@@ -124,6 +125,8 @@ class ClusterManager:
                 await self._heartbeat_task
             except asyncio.CancelledError:
                 pass
+        if self._client:
+            await self._client.aclose()
         logger.info(f"Cluster manager stopped for node {self.node_id}")
 
     async def _heartbeat_loop(self) -> None:
@@ -135,7 +138,7 @@ class ClusterManager:
                     await asyncio.gather(*tasks)
 
                 # Cleanup old peers (e.g., not seen for 30 seconds)
-                now = asyncio.get_event_loop().time()
+                now = asyncio.get_running_loop().time()
                 to_remove = [
                     node_id
                     for node_id, peer in self.peers.items()
@@ -162,7 +165,11 @@ class ClusterManager:
         """Add a peer to the cluster."""
         if node_info.node_id == self.node_id:
             return
-        self.peers[node_info.node_id] = ClusterPeer(node_info, self.broker)
+        if not self._client:
+            self._client = httpx.AsyncClient(timeout=2.0)
+        self.peers[node_info.node_id] = ClusterPeer(
+            node_info, self.broker, self._client
+        )
         logger.info(f"Added peer node {node_info.node_id} at {node_info.endpoint}")
 
     def register_remote_agent(self, agent_id: str, node_id: str) -> None:
