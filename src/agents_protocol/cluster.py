@@ -49,16 +49,13 @@ class ClusterPeer:
         """Forward a message to this peer node with resilience."""
 
         async def _forward() -> bool:
-
-            # In a real scenario, this would use a persistent session
-            # or a dedicated protocol
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                response = await client.post(
-                    f"{self.node_info.endpoint}/internal/forward",
-                    content=message.model_dump_json(),
-                )
-                response.raise_for_status()  # Trigger retry if not 2xx
-                return response.status_code == 200
+            # Use the persistent client for connection pooling
+            response = await self.client.post(
+                f"{self.node_info.endpoint}/internal/forward",
+                content=message.model_dump_json(),
+            )
+            response.raise_for_status()  # Trigger retry if not 2xx
+            return response.status_code == 200
 
         try:
             from typing import cast
