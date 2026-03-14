@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 import heapq
 from .protocol import AgentMessage, MessageStatus
@@ -75,7 +75,13 @@ class InMemoryMessageStore(MessageStore):
         self._dlq: Dict[str, Dict] = {}
         self.MAX_HISTORY = 1000
 
-    def _add_to_history(self, history_dict, set_dict, key, msg_id):
+    def _add_to_history(
+        self,
+        history_dict: Dict[str, Any],
+        set_dict: Dict[str, set],
+        key: str,
+        msg_id: str,
+    ) -> None:
         import collections
 
         if key not in history_dict:

@@ -193,7 +193,7 @@ class Agent(AgentProtocol):
         # Start the message processing loop
         self._loop_task = asyncio.create_task(self._message_loop())
 
-        def _handle_exception(task):
+        def _handle_exception(task: asyncio.Task) -> None:
             if not task.cancelled() and task.exception():
                 logger.error(
                     f"Message loop crashed for agent {self.agent_id}: "
