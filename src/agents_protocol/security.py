@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ssl
 import logging
+import hmac
 from typing import Dict, Optional, Any, List
 from enum import Enum
 
@@ -60,7 +61,7 @@ class SecurityManager:
         # 1. Verification of identity (if keys are registered)
         if sender_id in self._agent_keys:
             expected_token = self._agent_keys[sender_id]
-            if token != expected_token:
+            if not hmac.compare_digest(token or '', expected_token):
                 logger.warning(f"Unauthorized message from agent {sender_id}")
                 return AuthStatus.UNAUTHORIZED
 

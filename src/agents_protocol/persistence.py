@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict
 from datetime import datetime
+import heapq
 from .protocol import AgentMessage, MessageStatus
 
 
@@ -60,15 +61,30 @@ class InMemoryMessageStore(MessageStore):
     """
 
     def __init__(self) -> None:
+        import collections
         # Maps message.id to AgentMessage
         self._messages: Dict[str, AgentMessage] = {}
         # Lists of message IDs partitioned by agent
-        self._agent_history: Dict[str, List[str]] = {}
+        self._agent_history: Dict[str, collections.deque] = {}
+        self._agent_history_sets: Dict[str, set] = {}
         # Maps correlation_id to lists of message IDs
-        self._conversations: Dict[str, List[str]] = {}
-        # Dead Letter Queue: Dict[message_id,
-        #   Dict{"message": AgentMessage, "reason": str, "time": datetime}]
+        self._conversations: Dict[str, collections.deque] = {}
+        self._conversation_sets: Dict[str, set] = {}
+        # Dead Letter Queue
         self._dlq: Dict[str, Dict] = {}
+        self.MAX_HISTORY = 1000
+
+    def _add_to_history(self, history_dict, set_dict, key, msg_id):
+        import collections
+        if key not in history_dict:
+            history_dict[key] = collections.deque(maxlen=self.MAX_HISTORY)
+            set_dict[key] = set()
+        if msg_id not in set_dict[key]:
+            if len(history_dict[key]) == self.MAX_HISTORY:
+                old_id = history_dict[key].popleft()
+                set_dict[key].discard(old_id)
+            history_dict[key].append(msg_id)
+            set_dict[key].add(msg_id)
 
     async def save_message(self, message: AgentMessage) -> None:
         """Save message to in-memory dictionaries."""
@@ -76,24 +92,15 @@ class InMemoryMessageStore(MessageStore):
 
         # Track history for sender
         if message.sender_id:
-            if message.sender_id not in self._agent_history:
-                self._agent_history[message.sender_id] = []
-            if message.id not in self._agent_history[message.sender_id]:
-                self._agent_history[message.sender_id].append(message.id)
+            self._add_to_history(self._agent_history, self._agent_history_sets, message.sender_id, message.id)
 
         # Track history for recipient (if concrete)
         if message.recipient_id:
-            if message.recipient_id not in self._agent_history:
-                self._agent_history[message.recipient_id] = []
-            if message.id not in self._agent_history[message.recipient_id]:
-                self._agent_history[message.recipient_id].append(message.id)
+            self._add_to_history(self._agent_history, self._agent_history_sets, message.recipient_id, message.id)
 
         # Track by correlation_id for conversation tracking
         if message.correlation_id:
-            if message.correlation_id not in self._conversations:
-                self._conversations[message.correlation_id] = []
-            if message.id not in self._conversations[message.correlation_id]:
-                self._conversations[message.correlation_id].append(message.id)
+            self._add_to_history(self._conversations, self._conversation_sets, message.correlation_id, message.id)
 
     async def update_message_status(
         self, message_id: str, status: MessageStatus
@@ -112,7 +119,7 @@ class InMemoryMessageStore(MessageStore):
             return []
 
         # Get message IDs, grab objects from store, return tail truncated to limit
-        ids = self._agent_history[agent_id][-limit:]
+        ids = list(self._agent_history[agent_id])[-limit:]
         return [self._messages[msg_id] for msg_id in ids if msg_id in self._messages]
 
     async def get_conversation(self, correlation_id: str) -> List[AgentMessage]:
@@ -120,7 +127,7 @@ class InMemoryMessageStore(MessageStore):
         if correlation_id not in self._conversations:
             return []
 
-        ids = self._conversations[correlation_id]
+        ids = list(self._conversations[correlation_id])
         return [self._messages[msg_id] for msg_id in ids if msg_id in self._messages]
 
     async def add_to_dlq(self, message: AgentMessage, reason: str) -> None:
@@ -137,10 +144,9 @@ class InMemoryMessageStore(MessageStore):
 
     async def get_dlq(self, limit: int = 100) -> List[Dict]:
         """Get the top $limit items from the DLQ dict, ordered chronologically."""
-        items = list(self._dlq.values())
-        # Sort by failed_at timestamp (ascending)
+        items = heapq.nlargest(limit, self._dlq.values(), key=lambda x: x["failed_at"])
         items.sort(key=lambda x: x["failed_at"])
-        return items[-limit:]
+        return items
 
     async def remove_from_dlq(self, message_id: str) -> None:
         """Remove an item from the DLQ by ID."""

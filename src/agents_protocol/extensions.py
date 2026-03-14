@@ -1,6 +1,7 @@
 """Extension points and hook definitions for agents_protocol."""
 
 from __future__ import annotations
+import asyncio
 
 from abc import ABC, abstractmethod
 from enum import Enum, auto
@@ -81,8 +82,8 @@ class HookManager:
 
     async def trigger(self, hook: AgentHook, *args: Any, **kwargs: Any) -> None:
         """Trigger all callbacks for a hook."""
-        for callback in self._hooks[hook]:
-            await callback(*args, **kwargs)
+        if self._hooks[hook]:
+            await asyncio.gather(*(callback(*args, **kwargs) for callback in self._hooks[hook]))
 
 
 class ExtensionManager:

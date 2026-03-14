@@ -115,7 +115,7 @@ class Agent(AgentProtocol):
                 if message:
                     return message
             # Fall back to local inbox
-            message = await asyncio.wait_for(self._inbox.get(), timeout=0.01)
+            message = await asyncio.wait_for(self._inbox.get(), timeout=1.0)
             return message
         except asyncio.TimeoutError:
             return None
@@ -191,7 +191,14 @@ class Agent(AgentProtocol):
             broker._agents[self.agent_id] = self
         self._running = True
         # Start the message processing loop
-        asyncio.create_task(self._message_loop())
+        self._loop_task = asyncio.create_task(self._message_loop())
+
+        def _handle_exception(task):
+            if not task.cancelled() and task.exception():
+                logger.error(f"Message loop crashed for agent {self.agent_id}: {task.exception()}")
+
+        self._loop_task.add_done_callback(_handle_exception)
+
         logger.info(f"Agent {self.agent_id} connected to broker")
         await self._hooks.trigger(AgentHook.POST_CONNECT, self, broker)
 
@@ -199,6 +206,12 @@ class Agent(AgentProtocol):
         """Disconnect the agent from the broker."""
         await self._hooks.trigger(AgentHook.PRE_DISCONNECT, self)
         self._running = False
+        if hasattr(self, '_loop_task') and self._loop_task:
+            self._loop_task.cancel()
+            try:
+                await self._loop_task
+            except asyncio.CancelledError:
+                pass
         if self._broker:
             await self._broker.unregister_agent(self.agent_id)
             self._broker = None

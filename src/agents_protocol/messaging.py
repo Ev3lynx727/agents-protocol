@@ -1,6 +1,7 @@
 """Message broker and routing for agent communication."""
 
 from __future__ import annotations
+import time
 
 import asyncio
 import logging
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+import itertools
 
 class MessageBroker:
     """Central message broker for routing messages between agents.
@@ -55,6 +58,7 @@ class MessageBroker:
         self._message_timeout = 30.0  # seconds
         self._pending_messages: Dict[str, asyncio.Future] = {}
         self._extensions = ExtensionManager()
+        self._counter = itertools.count()
 
         # Metrics
         self.metrics = {
@@ -92,7 +96,7 @@ class MessageBroker:
         # Update or replace if already registered
         self._agents[agent_id] = agent
         if agent_id not in self._agent_inboxes:
-            self._agent_inboxes[agent_id] = asyncio.PriorityQueue()
+            self._agent_inboxes[agent_id] = asyncio.PriorityQueue(maxsize=10000)
         if agent_id not in self._registry._agents:
             self._registry.register(agent)
         logger.info(f"Agent {agent_id} registered with broker")
@@ -165,12 +169,17 @@ class MessageBroker:
                     # Route to specific recipients found by router
                     tasks = []
                     for rid in recipients:
-                        tasks.append(self._deliver_locally(rid, msg))
+                        tasks.append(self._deliver_locally(rid, msg.model_copy(deep=True, update={"recipient_id": rid})))
                     if tasks:
                         await asyncio.gather(*tasks)
                     msg.status = MessageStatus.DELIVERED
             else:
-                # Direct message - Still consult router for multiple recipients
+                # Direct message - If recipient is local, bypass the router for performance
+                if msg.recipient_id in self._agents:
+                    await self._deliver_locally(msg.recipient_id, msg)
+                    return msg.status
+
+                # Still consult router for multiple recipients
                 # (e.g. if recipient_id is a capability pattern)
                 recipients = self._router.route(msg, list(self._agents.keys()))
 
@@ -217,7 +226,7 @@ class MessageBroker:
                     # Route to multiple recipients found by router
                     tasks = []
                     for rid in recipients:
-                        tasks.append(self._deliver_locally(rid, msg))
+                        tasks.append(self._deliver_locally(rid, msg.model_copy(deep=True, update={"recipient_id": rid})))
                     if tasks:
                         await asyncio.gather(*tasks)
                     msg.status = MessageStatus.DELIVERED
@@ -245,9 +254,7 @@ class MessageBroker:
             return False
 
         try:
-            import time
-
-            priority_entry = (-message.priority, time.time_ns(), message)
+            priority_entry = (-message.priority, time.time_ns(), next(self._counter), message)
 
             await self._agent_inboxes[agent_id].put(priority_entry)
             logger.debug(f"Message {message.id} delivered locally to agent {agent_id}")
@@ -281,20 +288,8 @@ class MessageBroker:
         tasks = []
         for agent_id in self._agents:
             if agent_id != sender_id:
-                # Create a copy of the message for each recipient
-                msg_copy = AgentMessage(
-                    id=message.id,
-                    type=message.type,
-                    sender_id=message.sender_id,
-                    recipient_id=agent_id,
-                    priority=message.priority,
-                    status=message.status,
-                    timestamp=message.timestamp,
-                    correlation_id=message.correlation_id,
-                    reply_to=message.reply_to,
-                    content=message.content.copy(),
-                    metadata=message.metadata.copy(),
-                )
+                # Create a deep copy of the message for each recipient
+                msg_copy = message.model_copy(deep=True, update={"recipient_id": agent_id})
                 tasks.append(self._deliver_locally(agent_id, msg_copy))
 
         if tasks:
@@ -329,7 +324,7 @@ class MessageBroker:
 
         correlation_id = str(uuid.uuid4())
 
-        _ = AgentMessage(
+        msg = AgentMessage(
             type=message_type,
             sender_id="",  # Will be set by the sending agent
             recipient_id=recipient_id,
@@ -340,21 +335,18 @@ class MessageBroker:
         )
 
         # Create a future to wait for the response
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         future = loop.create_future()
         self._pending_messages[correlation_id] = future
 
         try:
-            # The actual send will be done by the agent
-            # This method is meant to be called by an agent
-            # So we need to set the sender_id properly
-            raise RuntimeError(
-                "Broker.request() should not be called directly. "
-                "Use agent.send_request() instead."
-            )
+            await self.send(msg)
+            return await asyncio.wait_for(future, timeout)
+        except asyncio.TimeoutError:
+            self._pending_messages.pop(correlation_id, None)
+            return None
         finally:
-            # Cleanup if needed
-            pass
+            self._pending_messages.pop(correlation_id, None)
 
     def set_response(self, correlation_id: str, response: AgentMessage) -> None:
         """Set a response for a pending request.
@@ -386,7 +378,7 @@ class MessageBroker:
             priority_entry = await asyncio.wait_for(
                 self._agent_inboxes[agent_id].get(), timeout=0.1
             )
-            _, _, msg = priority_entry
+            _, _, _, msg = priority_entry
             return cast(AgentMessage, msg)
         except asyncio.TimeoutError:
             return None
@@ -438,6 +430,12 @@ class RouterRegistry:
     """Registry for pluggable message routers."""
 
     _routers: Dict[str, type[MessageRouter]] = {}
+
+
+    @classmethod
+    def clear(cls) -> None:
+        cls._routers.clear()
+        cls.register("default", MessageRouter)
 
     @classmethod
     def register(cls, name: str, router_class: type[MessageRouter]) -> None:
@@ -523,9 +521,7 @@ class MessageRouter:
         """
         # Simple pattern matching - can be extended
         if pattern.startswith("capability:"):
-            _ = pattern.split(":", 1)[1]
-            # This would need access to agent registry to check capabilities
-            return True  # Placeholder
+            return message.recipient_id == pattern
         return False
 
 

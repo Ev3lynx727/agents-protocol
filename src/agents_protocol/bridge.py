@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import json
+import collections
 from typing import Any, Dict, Optional, TYPE_CHECKING
 from .agents import Agent
 from .protocol import AgentMessage, MessageType
@@ -29,12 +30,14 @@ class BridgeAgent(Agent):
     ):
         super().__init__(agent_id, name, capabilities, metadata)
         self.adapter = adapter or JSONRPCAdapter()
-        self._request_map: Dict[str, str] = {}  # msg_id -> sender_id
+        self._request_map: collections.OrderedDict[str, str] = collections.OrderedDict()  # msg_id -> sender_id
 
     async def _process_message(self, message: AgentMessage) -> None:
         """Forward internal messages to the external system."""
         if message.type == MessageType.REQUEST:
             self._request_map[message.id] = message.sender_id
+            if len(self._request_map) > 1000:
+                self._request_map.popitem(last=False)
 
         try:
             external_msg = self.adapter.from_protocol(message)
