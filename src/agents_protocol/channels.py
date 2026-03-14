@@ -627,6 +627,7 @@ class TCPSocketChannel(Channel):
             return message.status
         except Exception as e:
             logger.error(f"TCP send to {destination} failed: {e}")
+            self._outgoing_connections.pop(destination, None)
             message.status = MessageStatus.FAILED
             return message.status
 
