@@ -178,7 +178,7 @@ class MessageBroker:
                         await asyncio.gather(*tasks)
                     msg.status = MessageStatus.DELIVERED
             else:
-                # Direct message - If recipient is local, bypass the router for performance
+                # Direct message - If recipient is local, bypass router for performance
                 if msg.recipient_id in self._agents:
                     await self._deliver_locally(msg.recipient_id, msg)
                     return msg.status

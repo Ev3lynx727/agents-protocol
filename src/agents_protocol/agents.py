@@ -196,7 +196,8 @@ class Agent(AgentProtocol):
         def _handle_exception(task):
             if not task.cancelled() and task.exception():
                 logger.error(
-                    f"Message loop crashed for agent {self.agent_id}: {task.exception()}"
+                    f"Message loop crashed for agent {self.agent_id}: "
+                    f"{task.exception()}"
                 )
 
         self._loop_task.add_done_callback(_handle_exception)
