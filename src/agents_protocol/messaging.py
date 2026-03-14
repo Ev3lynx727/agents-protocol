@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import time
+import itertools
 
 import asyncio
 import logging
@@ -19,8 +20,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-
-import itertools
 
 class MessageBroker:
     """Central message broker for routing messages between agents.
@@ -169,7 +168,12 @@ class MessageBroker:
                     # Route to specific recipients found by router
                     tasks = []
                     for rid in recipients:
-                        tasks.append(self._deliver_locally(rid, msg.model_copy(deep=True, update={"recipient_id": rid})))
+                        tasks.append(
+                            self._deliver_locally(
+                                rid,
+                                msg.model_copy(deep=True, update={"recipient_id": rid}),
+                            )
+                        )
                     if tasks:
                         await asyncio.gather(*tasks)
                     msg.status = MessageStatus.DELIVERED
@@ -226,7 +230,12 @@ class MessageBroker:
                     # Route to multiple recipients found by router
                     tasks = []
                     for rid in recipients:
-                        tasks.append(self._deliver_locally(rid, msg.model_copy(deep=True, update={"recipient_id": rid})))
+                        tasks.append(
+                            self._deliver_locally(
+                                rid,
+                                msg.model_copy(deep=True, update={"recipient_id": rid}),
+                            )
+                        )
                     if tasks:
                         await asyncio.gather(*tasks)
                     msg.status = MessageStatus.DELIVERED
@@ -254,7 +263,12 @@ class MessageBroker:
             return False
 
         try:
-            priority_entry = (-message.priority, time.time_ns(), next(self._counter), message)
+            priority_entry = (
+                -message.priority,
+                time.time_ns(),
+                next(self._counter),
+                message,
+            )
 
             await self._agent_inboxes[agent_id].put(priority_entry)
             logger.debug(f"Message {message.id} delivered locally to agent {agent_id}")
@@ -289,7 +303,9 @@ class MessageBroker:
         for agent_id in self._agents:
             if agent_id != sender_id:
                 # Create a deep copy of the message for each recipient
-                msg_copy = message.model_copy(deep=True, update={"recipient_id": agent_id})
+                msg_copy = message.model_copy(
+                    deep=True, update={"recipient_id": agent_id}
+                )
                 tasks.append(self._deliver_locally(agent_id, msg_copy))
 
         if tasks:
@@ -430,7 +446,6 @@ class RouterRegistry:
     """Registry for pluggable message routers."""
 
     _routers: Dict[str, type[MessageRouter]] = {}
-
 
     @classmethod
     def clear(cls) -> None:

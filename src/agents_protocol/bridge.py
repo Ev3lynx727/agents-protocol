@@ -30,7 +30,9 @@ class BridgeAgent(Agent):
     ):
         super().__init__(agent_id, name, capabilities, metadata)
         self.adapter = adapter or JSONRPCAdapter()
-        self._request_map: collections.OrderedDict[str, str] = collections.OrderedDict()  # msg_id -> sender_id
+        self._request_map: collections.OrderedDict[str, str] = (
+            collections.OrderedDict()
+        )  # msg_id -> sender_id
 
     async def _process_message(self, message: AgentMessage) -> None:
         """Forward internal messages to the external system."""

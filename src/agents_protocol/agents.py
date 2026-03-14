@@ -195,7 +195,9 @@ class Agent(AgentProtocol):
 
         def _handle_exception(task):
             if not task.cancelled() and task.exception():
-                logger.error(f"Message loop crashed for agent {self.agent_id}: {task.exception()}")
+                logger.error(
+                    f"Message loop crashed for agent {self.agent_id}: {task.exception()}"
+                )
 
         self._loop_task.add_done_callback(_handle_exception)
 
@@ -206,7 +208,7 @@ class Agent(AgentProtocol):
         """Disconnect the agent from the broker."""
         await self._hooks.trigger(AgentHook.PRE_DISCONNECT, self)
         self._running = False
-        if hasattr(self, '_loop_task') and self._loop_task:
+        if hasattr(self, "_loop_task") and self._loop_task:
             self._loop_task.cancel()
             try:
                 await self._loop_task

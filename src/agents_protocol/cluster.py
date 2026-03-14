@@ -30,7 +30,12 @@ class ClusterNodeInfo(BaseModel):
 class ClusterPeer:
     """Represents a connection to a peer broker in the cluster."""
 
-    def __init__(self, node_info: ClusterNodeInfo, broker: MessageBroker, client: httpx.AsyncClient):
+    def __init__(
+        self,
+        node_info: ClusterNodeInfo,
+        broker: MessageBroker,
+        client: httpx.AsyncClient,
+    ):
         self.node_info = node_info
         self.broker = broker
         self.client = client
@@ -44,7 +49,6 @@ class ClusterPeer:
         """Forward a message to this peer node with resilience."""
 
         async def _forward() -> bool:
-
 
             # In a real scenario, this would use a persistent session
             # or a dedicated protocol
@@ -79,7 +83,6 @@ class ClusterPeer:
     async def send_heartbeat(self) -> bool:
         """Send a heartbeat to this peer."""
         try:
-
 
             async with httpx.AsyncClient(timeout=1.0) as client:
                 response = await client.get(f"{self.node_info.endpoint}/health")
@@ -169,7 +172,9 @@ class ClusterManager:
             return
         if not self._client:
             self._client = httpx.AsyncClient(timeout=2.0)
-        self.peers[node_info.node_id] = ClusterPeer(node_info, self.broker, self._client)
+        self.peers[node_info.node_id] = ClusterPeer(
+            node_info, self.broker, self._client
+        )
         logger.info(f"Added peer node {node_info.node_id} at {node_info.endpoint}")
 
     def register_remote_agent(self, agent_id: str, node_id: str) -> None:

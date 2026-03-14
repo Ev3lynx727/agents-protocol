@@ -62,6 +62,7 @@ class InMemoryMessageStore(MessageStore):
 
     def __init__(self) -> None:
         import collections
+
         # Maps message.id to AgentMessage
         self._messages: Dict[str, AgentMessage] = {}
         # Lists of message IDs partitioned by agent
@@ -76,6 +77,7 @@ class InMemoryMessageStore(MessageStore):
 
     def _add_to_history(self, history_dict, set_dict, key, msg_id):
         import collections
+
         if key not in history_dict:
             history_dict[key] = collections.deque(maxlen=self.MAX_HISTORY)
             set_dict[key] = set()
@@ -92,15 +94,30 @@ class InMemoryMessageStore(MessageStore):
 
         # Track history for sender
         if message.sender_id:
-            self._add_to_history(self._agent_history, self._agent_history_sets, message.sender_id, message.id)
+            self._add_to_history(
+                self._agent_history,
+                self._agent_history_sets,
+                message.sender_id,
+                message.id,
+            )
 
         # Track history for recipient (if concrete)
         if message.recipient_id:
-            self._add_to_history(self._agent_history, self._agent_history_sets, message.recipient_id, message.id)
+            self._add_to_history(
+                self._agent_history,
+                self._agent_history_sets,
+                message.recipient_id,
+                message.id,
+            )
 
         # Track by correlation_id for conversation tracking
         if message.correlation_id:
-            self._add_to_history(self._conversations, self._conversation_sets, message.correlation_id, message.id)
+            self._add_to_history(
+                self._conversations,
+                self._conversation_sets,
+                message.correlation_id,
+                message.id,
+            )
 
     async def update_message_status(
         self, message_id: str, status: MessageStatus

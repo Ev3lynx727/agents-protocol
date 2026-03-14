@@ -644,7 +644,6 @@ class ChannelRegistry:
 
     _channels: Dict[str, type[Channel]] = {}
 
-
     @classmethod
     def clear(cls) -> None:
         cls._channels.clear()

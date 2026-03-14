@@ -83,7 +83,9 @@ class HookManager:
     async def trigger(self, hook: AgentHook, *args: Any, **kwargs: Any) -> None:
         """Trigger all callbacks for a hook."""
         if self._hooks[hook]:
-            await asyncio.gather(*(callback(*args, **kwargs) for callback in self._hooks[hook]))
+            await asyncio.gather(
+                *(callback(*args, **kwargs) for callback in self._hooks[hook])
+            )
 
 
 class ExtensionManager:
