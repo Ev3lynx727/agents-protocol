@@ -80,13 +80,11 @@ class ClusterPeer:
     async def send_heartbeat(self) -> bool:
         """Send a heartbeat to this peer."""
         try:
-
-            async with httpx.AsyncClient(timeout=1.0) as client:
-                response = await client.get(f"{self.node_info.endpoint}/health")
-                if response.status_code == 200:
-                    self.node_info.last_seen = asyncio.get_running_loop().time()
-                    return True
-                return False
+            response = await self.client.get(f"{self.node_info.endpoint}/health")
+            if response.status_code == 200:
+                self.node_info.last_seen = asyncio.get_running_loop().time()
+                return True
+            return False
         except Exception:
             return False
 
