@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, Tuple, cast
 import asyncio
+import json
 import struct
 import logging
 import ssl
@@ -201,8 +202,9 @@ class HTTPChannel(Channel):
                     content_length = int(line.split(":", 1)[1].strip())
 
             # Read body if present
-            if content_length > 0:
-                body += await reader.readexactly(content_length)
+            remaining = content_length - len(body)
+            if remaining > 0:
+                body += await reader.readexactly(remaining)
 
             # Parse the request
             request_line = headers.decode().split("\r\n")[0]
@@ -210,8 +212,6 @@ class HTTPChannel(Channel):
 
             if method == "POST" and path == "/message":
                 # Handle incoming message
-                import json
-
                 message_data = json.loads(body.decode())
                 message = AgentMessage(**message_data)
 
@@ -277,7 +277,7 @@ class HTTPChannel(Channel):
             return cast(
                 bool,
                 await self.timeout_manager.run_with_timeout(
-                    self.retry_policy.execute, args=(_send,)
+                    self.retry_policy.execute, self.timeout, _send
                 ),
             )
         except Exception as e:
@@ -372,8 +372,6 @@ class WebSocketChannel(Channel):
         try:
             # First message should be agent identification
             message = await websocket.recv()
-            import json
-
             data = json.loads(message)
 
             if data.get("type") == "identify":
@@ -422,7 +420,7 @@ class WebSocketChannel(Channel):
             pass
 
             ws = self._connections[destination]
-            await ws.send(message.json())
+            await ws.send(message.model_dump_json())
             message.status = MessageStatus.DELIVERED
             return message.status
         except Exception as e:
@@ -469,6 +467,7 @@ class TCPSocketChannel(Channel):
         self.ssl_context = ssl_context
         self._server: Optional[asyncio.Server] = None
         self._connections: set[asyncio.Task] = set()
+        self._outgoing_connections: Dict[str, asyncio.StreamWriter] = {}
 
     async def start(self) -> None:
         """Start the TCP server."""
@@ -488,6 +487,14 @@ class TCPSocketChannel(Channel):
         if self._server:
             self._server.close()
             await self._server.wait_closed()
+
+        for writer in self._outgoing_connections.values():
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+        self._outgoing_connections.clear()
 
         # Cancel any active connection handler tasks
         for task in self._connections:
@@ -556,8 +563,6 @@ class TCPSocketChannel(Channel):
                 except asyncio.IncompleteReadError:
                     break
 
-                import json
-
                 try:
                     msg_dict = json.loads(data.decode())
                     message = AgentMessage(**msg_dict)
@@ -605,26 +610,26 @@ class TCPSocketChannel(Channel):
             return message.status
 
         try:
-            # We open a temporary connection for sending.
-            reader, writer = await asyncio.open_connection(
-                host, port, ssl=self.ssl_context
-            )
+            writer = self._outgoing_connections.get(destination)
+            if not writer or writer.is_closing():
+                reader, writer = await asyncio.open_connection(
+                    host, port, ssl=self.ssl_context
+                )
+                self._outgoing_connections[destination] = writer
 
-            try:
-                data = message.model_dump_json().encode()
-                # Big-endian 4-byte unsigned integer indicating length
-                msg_length = struct.pack(">I", len(data))
+            data = message.model_dump_json().encode()
+            # Big-endian 4-byte unsigned integer indicating length
+            msg_length = struct.pack(">I", len(data))
 
-                writer.write(msg_length + data)
-                await writer.drain()
-                message.status = MessageStatus.DELIVERED
-            finally:
-                writer.close()
-                await writer.wait_closed()
-
+            writer.write(msg_length + data)
+            await writer.drain()
+            message.status = MessageStatus.DELIVERED
             return message.status
         except Exception as e:
             logger.error(f"TCP send to {destination} failed: {e}")
+            old_writer = self._outgoing_connections.pop(destination, None)
+            if old_writer:
+                old_writer.close()
             message.status = MessageStatus.FAILED
             return message.status
 
@@ -641,6 +646,14 @@ class ChannelRegistry:
     """Registry for pluggable communication channels."""
 
     _channels: Dict[str, type[Channel]] = {}
+
+    @classmethod
+    def clear(cls) -> None:
+        cls._channels.clear()
+        cls.register("local", LocalChannel)
+        cls.register("http", HTTPChannel)
+        cls.register("websocket", WebSocketChannel)
+        cls.register("tcp", TCPSocketChannel)
 
     @classmethod
     def register(cls, name: str, channel_class: type[Channel]) -> None:

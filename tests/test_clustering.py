@@ -67,7 +67,7 @@ async def test_cluster_heartbeat_and_cleanup():
     node_b_info = ClusterNodeInfo(
         node_id="node_b",
         endpoint="http://node-b",
-        last_seen=asyncio.get_event_loop().time() - 40,  # Older than 30s
+        last_seen=asyncio.get_running_loop().time() - 40,  # Older than 30s
     )
     cluster.add_peer(node_b_info)
     cluster.register_remote_agent("agent_b", "node_b")
@@ -81,7 +81,7 @@ async def test_cluster_heartbeat_and_cleanup():
         cluster._running = True
         # We trigger the loop logic manually to avoid long sleeps
         # Since we want to test the cleanup:
-        now = asyncio.get_event_loop().time()
+        now = asyncio.get_running_loop().time()
         to_remove = [
             node_id
             for node_id, peer in cluster.peers.items()
